@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../db');
 const { authMiddleware } = require('../auth');
+const { notifyUser } = require('../notify');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -90,6 +91,15 @@ router.post('/', (req, res) => {
     memberList.forEach((m) => insertMember.run(orderId, String(m.name).trim(), m.idnum || null));
 
     db.exec('COMMIT');
+
+    notifyUser(req.userId, {
+      type: 'order',
+      title: '订单付款成功',
+      body: `您的订单 ${orderNo}（${refTitle}）已付款成功，金额 RM ${total.toFixed(2)}。`,
+      linkKind: 'order',
+      linkId: orderNo,
+    });
+
     res.status(201).json({ order: loadOrder(orderId, req.userId) });
   } catch (err) {
     db.exec('ROLLBACK');

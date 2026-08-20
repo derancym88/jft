@@ -40,9 +40,54 @@ frontend build or CORS config is needed.
 - `orders` / `order_items` / `order_members` — a member's paid registrations,
   each tied to `user_id`
 
-Event/prayer catalog content is currently seed data (`server/seed.js`) rather
-than admin-editable; extend `seed.js` or add write endpoints if you need to
-manage it without redeploying.
+- `announcements` — home-screen banners / promotions (公告 / 优惠), admin-editable
+- `notifications` — per-member notification feed (welcome message, order
+  confirmations, and anything else `server/notify.js` triggers)
+
+Event/prayer catalog and announcements are seeded on first run
+(`server/seed.js`) but are fully editable afterwards through the admin
+backoffice — see below.
+
+## Admin backoffice
+
+A separate admin UI lives at **`/admin`** (`public/admin/`), served by the
+same Node process. It's for temple staff, not members — different login,
+different look (desktop dashboard, not the mobile PWA).
+
+- Manage 法会 (events + their reg items), 疏文 (categories + types), and
+  公告/优惠 (announcements/promotions) — full create/edit/delete.
+- Read-only views of all 订单 (orders) and 会员 (members).
+- A dashboard tab with member/event/revenue counts and recent orders.
+
+A default admin account is created automatically on first run — the email
+and a random password are printed **once** to the server console/log:
+
+```
+ Created default admin account:
+   email:    admin@lyszt.local
+   password: <random>
+```
+
+Set `ADMIN_EMAIL` / `ADMIN_PASSWORD` env vars before first run to control
+these instead of using the generated password. Log in at `/admin` and treat
+that account like any other credential — rotate it if the console output
+was ever exposed.
+
+Admin auth reuses the same JWT/bcrypt mechanism as members, gated by a
+`role` column on `users` (`'member'` vs `'admin'`) and an `adminMiddleware`
+on every `/api/admin/*` route.
+
+## Notifications & promotions
+
+- **Promotions** (`announcements` table): shown as banner cards on the
+  member home screen, right under the hero — managed entirely from
+  `/admin` → 公告. Each has a badge (公告/优惠), title, body, and an
+  optional link to an event.
+- **Notifications** (`notifications` table): a personal feed per member,
+  reached via the bell icon on the home screen (red dot = unread) or
+  我的 → 消息通知. Auto-created on registration (welcome message) and on
+  every paid order (order confirmation) via `server/notify.js`; tapping one
+  marks it read and jumps to the linked event/order.
 
 ## Payments
 
@@ -99,3 +144,8 @@ Useful commands on the server: `pm2 status`, `pm2 logs jft`, `pm2 restart jft`.
 | POST   | /api/orders               | ✓    | Create + pay an order (mock)        |
 | GET    | /api/orders               | ✓    | List the member's orders            |
 | GET    | /api/orders/:orderNo      | ✓    | Single order detail                 |
+| GET    | /api/announcements        | –    | Active promotions/announcements     |
+| GET    | /api/notifications        | ✓    | The member's notifications + unread count |
+| POST   | /api/notifications/:id/read | ✓  | Mark one notification read          |
+| POST   | /api/notifications/read-all | ✓  | Mark all notifications read         |
+| *      | /api/admin/*              | ✓ admin | Events/prayers/announcements CRUD, orders/members read — see `server/routes/admin.js` |

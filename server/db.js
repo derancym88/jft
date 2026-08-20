@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT NOT NULL UNIQUE,
   phone TEXT,
   password_hash TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'member',
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -90,12 +91,45 @@ CREATE TABLE IF NOT EXISTS order_members (
   idnum TEXT
 );
 
+CREATE TABLE IF NOT EXISTS announcements (
+  id TEXT PRIMARY KEY,
+  badge TEXT NOT NULL DEFAULT '公告',
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  link_kind TEXT,
+  link_id TEXT,
+  active INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  link_kind TEXT,
+  link_id TEXT,
+  is_read INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_event_items_event ON event_items(event_id);
 CREATE INDEX IF NOT EXISTS idx_prayer_types_cat ON prayer_types(category_id);
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_members_order ON order_members(order_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
 `);
+
+function ensureColumn(table, column, ddl) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  }
+}
+ensureColumn('users', 'role', "role TEXT NOT NULL DEFAULT 'member'");
 
 require('./seed')(db);
 

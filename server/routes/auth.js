@@ -2,13 +2,14 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db');
 const { signToken, authMiddleware } = require('../auth');
+const { notifyUser } = require('../notify');
 
 const router = express.Router();
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function publicUser(row) {
-  return { id: row.id, name: row.name, email: row.email, phone: row.phone };
+  return { id: row.id, name: row.name, email: row.email, phone: row.phone, role: row.role };
 }
 
 router.post('/register', (req, res) => {
@@ -27,6 +28,11 @@ router.post('/register', (req, res) => {
     .run(String(name).trim(), emailNorm, phone ? String(phone).trim() : null, passwordHash);
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
+  notifyUser(user.id, {
+    type: 'welcome',
+    title: '欢迎加入灵一守玄坛',
+    body: '诚心所愿，玄坛护佑。您现在可以报名法会、办理疏文，并随时查看订单记录。',
+  });
   const token = signToken(user);
   res.status(201).json({ token, user: publicUser(user) });
 });

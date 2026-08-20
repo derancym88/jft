@@ -98,7 +98,25 @@ const PRAYER_CATEGORIES = [
   },
 ];
 
-module.exports = function seed(db) {
+const ANNOUNCEMENTS = [
+  {
+    id: 'a1', badge: '公告', title: '2027 新春新福法会 即将开始报名',
+    body: '2027年2月10日 (正月初五) 举行，名额有限，点击查看详情并提前报名。',
+    linkKind: 'event', linkId: 'ev1',
+  },
+  {
+    id: 'a2', badge: '优惠', title: '中元普渡法会 提前报名享早鸟优惠',
+    body: '即日起报名 2027 中元普渡法会，即可享有早鸟优惠价，欢迎提前登记。',
+    linkKind: 'event', linkId: 'ev3',
+  },
+  {
+    id: 'a3', badge: '优惠', title: '疏文办理 新用户首单立减 RM10',
+    body: '首次办理疏文的信众，凭本次通知联系客服即可获得首单优惠，欢迎办理。',
+    linkKind: 'prayers', linkId: null,
+  },
+];
+
+function seedCatalog(db) {
   const { count } = db.prepare('SELECT COUNT(*) AS count FROM events').get();
   if (count > 0) return;
 
@@ -131,4 +149,48 @@ module.exports = function seed(db) {
     db.exec('ROLLBACK');
     throw err;
   }
+}
+
+function seedAnnouncements(db) {
+  const { count } = db.prepare('SELECT COUNT(*) AS count FROM announcements').get();
+  if (count > 0) return;
+
+  const insert = db.prepare(`
+    INSERT INTO announcements (id, badge, title, body, link_kind, link_id, sort_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+  ANNOUNCEMENTS.forEach((a, i) => insert.run(a.id, a.badge, a.title, a.body, a.linkKind, a.linkId, i));
+}
+
+function seedAdmin(db) {
+  const bcrypt = require('bcryptjs');
+  const { count } = db.prepare("SELECT COUNT(*) AS count FROM users WHERE role = 'admin'").get();
+  if (count > 0) return;
+
+  const email = (process.env.ADMIN_EMAIL || 'admin@lyszt.local').trim().toLowerCase();
+  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+  if (existing) {
+    db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(existing.id);
+    return;
+  }
+
+  const password = process.env.ADMIN_PASSWORD || require('crypto').randomBytes(9).toString('base64url');
+  const hash = bcrypt.hashSync(password, 10);
+  db.prepare(`
+    INSERT INTO users (name, email, phone, password_hash, role) VALUES (?, ?, ?, ?, 'admin')
+  `).run('管理员', email, null, hash);
+
+  console.log('==============================================');
+  console.log(' Created default admin account:');
+  console.log('   email:    ' + email);
+  console.log('   password: ' + password);
+  console.log(' Log in at /admin and change this immediately.');
+  console.log(' Set ADMIN_EMAIL / ADMIN_PASSWORD env vars to avoid this message.');
+  console.log('==============================================');
+}
+
+module.exports = function seed(db) {
+  seedCatalog(db);
+  seedAnnouncements(db);
+  seedAdmin(db);
 };

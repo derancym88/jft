@@ -5,6 +5,9 @@ const authRoutes = require('./routes/auth');
 const eventsRoutes = require('./routes/events');
 const prayersRoutes = require('./routes/prayers');
 const ordersRoutes = require('./routes/orders');
+const announcementsRoutes = require('./routes/announcements');
+const notificationsRoutes = require('./routes/notifications');
+const adminRoutes = require('./routes/admin');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
@@ -15,6 +18,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api/events', eventsRoutes);
 app.use('/api/prayers', prayersRoutes);
 app.use('/api/orders', ordersRoutes);
+app.use('/api/announcements', announcementsRoutes);
+app.use('/api/notifications', notificationsRoutes);
+app.use('/api/admin', adminRoutes);
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 

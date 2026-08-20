@@ -171,6 +171,46 @@ button { font-family: inherit; }
 .section-title h2 { font-size: 15px; margin: 0; font-weight: 700; }
 .section-title .link { font-size: 11.5px; color: var(--text-faint); }
 
+/* ---------- announcements ---------- */
+
+.announce-list { margin-bottom: 18px; display: flex; flex-direction: column; gap: 8px; }
+.announce-card {
+  display: flex; align-items: flex-start; gap: 10px;
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 11px 12px; cursor: pointer;
+}
+.announce-card .an-badge {
+  flex-shrink: 0; font-size: 10.5px; padding: 3px 8px; border-radius: 20px; font-weight: 600;
+  background: rgba(212,165,72,0.14); color: var(--gold-soft); white-space: nowrap;
+}
+.announce-card .an-body { flex: 1; min-width: 0; }
+.announce-card .an-title { font-size: 12.5px; font-weight: 600; margin-bottom: 2px; }
+.announce-card .an-text {
+  font-size: 11px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.announce-card .an-arrow { color: var(--text-faint); flex-shrink: 0; align-self: center; }
+
+/* ---------- notification bell + list ---------- */
+
+.icon-btn.has-dot { position: relative; }
+.icon-btn .dot {
+  position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--red-2); border: 1.5px solid var(--bg);
+}
+
+.notif-item {
+  display: flex; gap: 10px; padding: 13px 4px; border-bottom: 1px solid var(--border); cursor: pointer;
+}
+.notif-item:last-child { border-bottom: none; }
+.notif-item .ni-dot { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; background: var(--gold); }
+.notif-item.read .ni-dot { background: transparent; }
+.notif-item .ni-body { flex: 1; min-width: 0; }
+.notif-item .ni-title { font-size: 13.5px; font-weight: 600; margin-bottom: 3px; }
+.notif-item.read .ni-title { color: var(--text-dim); font-weight: 500; }
+.notif-item .ni-text { font-size: 11.5px; color: var(--text-faint); line-height: 1.5; }
+.notif-item .ni-time { font-size: 10.5px; color: var(--text-faint); margin-top: 4px; }
+
 /* ---------- event cards ---------- */
 
 .event-card {

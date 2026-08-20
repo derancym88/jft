@@ -106,6 +106,7 @@ const routes = [
   [/^#\/me$/, () => renderMe()],
   [/^#\/login$/, () => renderLogin()],
   [/^#\/register$/, () => renderRegister()],
+  [/^#\/notifications$/, () => renderNotifications()],
 ];
 
 function router() {
@@ -124,6 +125,7 @@ function syncTabbar(hash) {
   else if (hash.startsWith('#/prayers') || hash.startsWith('#/prayer-apply')) key = '#/prayers';
   else if (hash.startsWith('#/orders')) key = '#/orders';
   else if (hash.startsWith('#/me') || hash.startsWith('#/login') || hash.startsWith('#/register')) key = '#/me';
+  else if (hash.startsWith('#/notifications')) key = '#/home';
 
   const hideTabbar = hash.startsWith('#/confirm') || hash.startsWith('#/success');
   tabbar.style.display = hideTabbar ? 'none' : 'flex';
@@ -145,19 +147,28 @@ tabbar.addEventListener('click', (e) => {
 async function renderHome() {
   const myToken = renderToken;
   app.innerHTML = loadingHtml('灵一守玄坛');
-  let events;
-  try { events = await ensureEvents(); } catch (e) { if (myToken === renderToken) app.innerHTML = errorHtml('灵一守玄坛', null, e.message); return; }
+  let events, announcements, unreadCount = 0;
+  try {
+    events = await ensureEvents();
+    announcements = (await api('/announcements')).announcements;
+    if (isLoggedIn()) {
+      try { unreadCount = (await api('/notifications')).unreadCount; } catch (e) { /* ignore */ }
+    }
+  } catch (e) { if (myToken === renderToken) app.innerHTML = errorHtml('灵一守玄坛', null, e.message); return; }
   if (myToken !== renderToken) return;
 
   const ongoing = events.filter((e) => e.status !== 'ended').slice(0, 2);
+  const bellBtn = `<button class="icon-btn ${unreadCount > 0 ? 'has-dot' : ''}" data-nav="#/notifications">${icon('bell')}${unreadCount > 0 ? '<span class="dot"></span>' : ''}</button>`;
   app.innerHTML = `
-    ${header('灵一守玄坛', { right: `<button class="icon-btn" data-nav="#/orders">${icon('bell')}</button>` })}
+    ${header('灵一守玄坛', { right: bellBtn })}
     <div class="page-body">
       <div class="hero">
         <div class="hero-eyebrow">诚心所愿 · 玄坛护佑</div>
         <div class="hero-title">道法自然 · 玄坛护佑 · 福泽众生</div>
         <div class="hero-sub">法会报名与疏文办理，一站式线上办理</div>
       </div>
+
+      ${announcements.length ? `<div class="announce-list">${announcements.map(announceCardHtml).join('')}</div>` : ''}
 
       <div class="quick-actions">
         <div class="quick-card primary" data-nav="#/events">
@@ -188,6 +199,26 @@ async function renderHome() {
       ${ongoing.map(eventCardHtml).join('')}
     </div>
   `;
+}
+
+function linkTarget(kind, id) {
+  if (kind === 'event' && id) return `#/events/${id}`;
+  if (kind === 'prayers') return '#/prayers';
+  if (kind === 'order' && id) return `#/orders/${id}`;
+  return null;
+}
+
+function announceCardHtml(a) {
+  const target = linkTarget(a.linkKind, a.linkId);
+  return `
+  <div class="announce-card" ${target ? `data-nav="${target}"` : ''}>
+    <span class="an-badge">${a.badge}</span>
+    <div class="an-body">
+      <div class="an-title">${a.title}</div>
+      <div class="an-text">${a.body}</div>
+    </div>
+    ${target ? '<span class="an-arrow">›</span>' : ''}
+  </div>`;
 }
 
 function eventCardHtml(e) {
@@ -657,6 +688,54 @@ async function renderOrderDetail(orderNo) {
   `;
 }
 
+/* ================= NOTIFICATIONS ================= */
+
+async function renderNotifications() {
+  if (!requireAuth('#/notifications')) return;
+  const myToken = renderToken;
+  app.innerHTML = loadingHtml('消息通知', '#/home');
+  let notifications, unreadCount;
+  try { ({ notifications, unreadCount } = await api('/notifications')); }
+  catch (e) { if (myToken === renderToken) app.innerHTML = errorHtml('消息通知', '#/home', e.message); return; }
+  if (myToken !== renderToken) return;
+
+  app.innerHTML = `
+    ${header('消息通知', {
+      back: '#/home',
+      right: unreadCount > 0 ? `<button class="btn ghost sm" id="read-all-btn">全部已读</button>` : '',
+    })}
+    <div class="page-body">
+      ${notifications.length ? `<div class="form-card" style="padding:4px 12px">${notifications.map(notifItemHtml).join('')}</div>` : emptyStateHtml('暂无通知')}
+    </div>
+  `;
+
+  document.getElementById('read-all-btn')?.addEventListener('click', async () => {
+    try { await api('/notifications/read-all', { method: 'POST' }); renderNotifications(); }
+    catch (e) { toast(e.message); }
+  });
+
+  app.querySelectorAll('[data-notif]').forEach((row) => {
+    row.addEventListener('click', async () => {
+      const id = row.dataset.notif;
+      const target = linkTarget(row.dataset.linkKind, row.dataset.linkId);
+      try { await api(`/notifications/${id}/read`, { method: 'POST' }); } catch (e) { /* ignore */ }
+      if (target) nav(target); else renderNotifications();
+    });
+  });
+}
+
+function notifItemHtml(n) {
+  return `
+  <div class="notif-item ${n.isRead ? 'read' : ''}" data-notif="${n.id}" data-link-kind="${n.linkKind || ''}" data-link-id="${n.linkId || ''}">
+    <div class="ni-dot"></div>
+    <div class="ni-body">
+      <div class="ni-title">${n.title}</div>
+      <div class="ni-text">${n.body}</div>
+      <div class="ni-time">${n.createdAt}</div>
+    </div>
+  </div>`;
+}
+
 /* ================= ME ================= */
 
 function renderMe() {
@@ -679,10 +758,12 @@ function renderMe() {
   const menu = [
     ['user', '我的资料'],
     ['orders', '办理记录 / 疏文查询'],
+    ['bell', '消息通知'],
     ['remind', '法会提醒'],
     ['cs', '联系客服'],
     ['about', '关于我们'],
   ];
+  const menuNav = { '办理记录 / 疏文查询': '#/orders', '消息通知': '#/notifications' };
   app.innerHTML = `
     ${header('我的')}
     <div class="page-body">
@@ -695,7 +776,7 @@ function renderMe() {
       </div>
       <div class="menu-list">
         ${menu.map(([ic, label]) => `
-          <div class="menu-item" ${label.includes('办理记录') ? 'data-nav="#/orders"' : ''}>
+          <div class="menu-item" ${menuNav[label] ? `data-nav="${menuNav[label]}"` : ''}>
             ${icon(ic)}<span>${label}</span><span class="mi-arrow">›</span>
           </div>
         `).join('')}
