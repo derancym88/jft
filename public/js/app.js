@@ -1,7 +1,12 @@
-/* 灵一守玄坛 — app shell, router, screens */
+/* 灵一守玄坛 — app shell, router, screens (API-backed) */
 
 const app = document.getElementById('app');
 const tabbar = document.getElementById('tabbar');
+
+let EVENTS_CACHE = null;
+let PRAYERS_CACHE = null;
+let pendingNav = null;
+let renderToken = 0;
 
 /* ---------- helpers ---------- */
 
@@ -12,15 +17,18 @@ function toast(msg) {
   el.textContent = msg;
   el.classList.add('show');
   clearTimeout(toast._t);
-  toast._t = setTimeout(() => el.classList.remove('show'), 1600);
+  toast._t = setTimeout(() => el.classList.remove('show'), 1800);
 }
 
 function nav(hash) { location.hash = hash; }
 
-function el(html) {
-  const t = document.createElement('template');
-  t.innerHTML = html.trim();
-  return t.content.firstElementChild;
+async function ensureEvents() {
+  if (!EVENTS_CACHE) EVENTS_CACHE = (await api('/events')).events;
+  return EVENTS_CACHE;
+}
+async function ensurePrayers() {
+  if (!PRAYERS_CACHE) PRAYERS_CACHE = (await api('/prayers/categories')).categories;
+  return PRAYERS_CACHE;
 }
 
 function icon(name) {
@@ -39,14 +47,14 @@ function icon(name) {
     save: '<path d="M5 4h11l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/><path d="M8 4v6h8V4"/>',
     gen: '<path d="M4 6h16M4 12h10M4 18h7"/>',
     orders: '<path d="M4 7h16l-1.5 12.2a1 1 0 0 1-1 .8H6.5a1 1 0 0 1-1-.8L4 7Z"/><path d="M8 7V6a4 4 0 0 1 8 0v1"/>',
-    remind: '<path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><circle cx="9" cy="15" r="0"/><path d="M12 4v16"/>',
+    remind: '<path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M12 4v16"/>',
     check: '<path d="M20 6 9 17l-5-5"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
     user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/>',
     lock: '<rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
     cs: '<path d="M4 12a8 8 0 1 1 16 0v5a2 2 0 0 1-2 2h-1v-6h3M4 17v-5h3v6H6a2 2 0 0 1-2-2Z"/>',
     about: '<circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/>',
-    trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+    logout: '<path d="M9 21H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
   };
   return `<svg viewBox="0 0 24 24" fill="none">${paths[name] || ''}</svg>`;
 }
@@ -60,16 +68,25 @@ function header(title, opts = {}) {
   </div>`;
 }
 
-/* ---------- cart (shared between 法会报名 and 疏文办理 flows) ---------- */
-
-function newCart(kind, ref) {
-  STATE.cart = { kind, refId: ref.id, refTitle: ref.title || ref.name, items: [], members: [], main: null, createdAt: Date.now() };
-  saveState();
+function emptyStateHtml(msg) {
+  return `<div class="empty-state"><div class="es-icon">✦</div><div>${msg}</div></div>`;
 }
 
-function cartTotal() {
-  if (!STATE.cart) return 0;
-  return STATE.cart.items.reduce((s, it) => s + it.price * it.qty, 0);
+function loadingHtml(title, back) {
+  return header(title, { back }) + `<div class="page-body">${emptyStateHtml('加载中…')}</div>`;
+}
+
+function errorHtml(title, back, msg) {
+  return header(title, { back }) + `<div class="page-body">${emptyStateHtml(msg || '加载失败，请重试')}</div>`;
+}
+
+function requireAuth(nextHash) {
+  if (!isLoggedIn()) {
+    pendingNav = nextHash;
+    nav('#/login');
+    return false;
+  }
+  return true;
 }
 
 /* ================= ROUTER ================= */
@@ -87,16 +104,18 @@ const routes = [
   [/^#\/orders$/, () => renderOrders()],
   [/^#\/orders\/([^/]+)$/, (m) => renderOrderDetail(m[1])],
   [/^#\/me$/, () => renderMe()],
+  [/^#\/login$/, () => renderLogin()],
+  [/^#\/register$/, () => renderRegister()],
 ];
 
 function router() {
+  renderToken++;
   const hash = location.hash || '#/home';
   for (const [re, fn] of routes) {
     const m = hash.match(re);
     if (m) { fn(m); syncTabbar(hash); window.scrollTo(0, 0); return; }
   }
-  renderHome();
-  syncTabbar('#/home');
+  nav('#/home');
 }
 
 function syncTabbar(hash) {
@@ -104,7 +123,7 @@ function syncTabbar(hash) {
   if (hash.startsWith('#/events')) key = '#/events';
   else if (hash.startsWith('#/prayers') || hash.startsWith('#/prayer-apply')) key = '#/prayers';
   else if (hash.startsWith('#/orders')) key = '#/orders';
-  else if (hash.startsWith('#/me')) key = '#/me';
+  else if (hash.startsWith('#/me') || hash.startsWith('#/login') || hash.startsWith('#/register')) key = '#/me';
 
   const hideTabbar = hash.startsWith('#/confirm') || hash.startsWith('#/success');
   tabbar.style.display = hideTabbar ? 'none' : 'flex';
@@ -114,7 +133,7 @@ function syncTabbar(hash) {
 window.addEventListener('hashchange', router);
 document.addEventListener('click', (e) => {
   const t = e.target.closest('[data-nav]');
-  if (t) { nav(t.dataset.nav); }
+  if (t) nav(t.dataset.nav);
 });
 tabbar.addEventListener('click', (e) => {
   const b = e.target.closest('.tab-btn');
@@ -123,8 +142,14 @@ tabbar.addEventListener('click', (e) => {
 
 /* ================= HOME ================= */
 
-function renderHome() {
-  const ongoing = EVENTS.filter((e) => e.status !== 'ended').slice(0, 2);
+async function renderHome() {
+  const myToken = renderToken;
+  app.innerHTML = loadingHtml('灵一守玄坛');
+  let events;
+  try { events = await ensureEvents(); } catch (e) { if (myToken === renderToken) app.innerHTML = errorHtml('灵一守玄坛', null, e.message); return; }
+  if (myToken !== renderToken) return;
+
+  const ongoing = events.filter((e) => e.status !== 'ended').slice(0, 2);
   app.innerHTML = `
     ${header('灵一守玄坛', { right: `<button class="icon-btn" data-nav="#/orders">${icon('bell')}</button>` })}
     <div class="page-body">
@@ -190,9 +215,15 @@ function eventCardHtml(e) {
 
 let eventsFilter = 'ongoing';
 
-function renderEvents() {
+async function renderEvents() {
+  const myToken = renderToken;
+  app.innerHTML = loadingHtml('法会活动');
+  let events;
+  try { events = await ensureEvents(); } catch (e) { if (myToken === renderToken) app.innerHTML = errorHtml('法会活动', null, e.message); return; }
+  if (myToken !== renderToken) return;
+
   const tabs = [['ongoing', '进行中'], ['upcoming', '即将开始'], ['ended', '已结束']];
-  const list = EVENTS.filter((e) => e.status === eventsFilter);
+  const list = events.filter((e) => e.status === eventsFilter);
   app.innerHTML = `
     ${header('法会活动')}
     <div class="page-body">
@@ -209,16 +240,18 @@ function renderEvents() {
   });
 }
 
-function emptyStateHtml(msg) {
-  return `<div class="empty-state"><div class="es-icon">✦</div><div>${msg}</div></div>`;
-}
-
 /* ================= EVENT DETAIL ================= */
 
 let eventSelections = {}; // eventId -> Set of item ids
 
-function renderEventDetail(id) {
-  const e = findEvent(id);
+async function renderEventDetail(id) {
+  const myToken = renderToken;
+  app.innerHTML = loadingHtml('法会详情', '#/events');
+  let events;
+  try { events = await ensureEvents(); } catch (e) { if (myToken === renderToken) app.innerHTML = errorHtml('法会详情', '#/events', e.message); return; }
+  if (myToken !== renderToken) return;
+
+  const e = events.find((ev) => ev.id === id);
   if (!e) { nav('#/events'); return; }
   if (!eventSelections[id]) eventSelections[id] = new Set(e.items.map((i) => i.id));
 
@@ -263,20 +296,25 @@ function renderEventDetail(id) {
   if (nextBtn) nextBtn.addEventListener('click', () => {
     newCart('event', e);
     STATE.cart.items = e.items.filter((i) => sel.has(i.id)).map((i) => ({ id: i.id, name: i.name, price: i.price, qty: 1 }));
-    saveState();
     nav(`#/events/${id}/apply`);
   });
 }
 
 /* ================= PRAYER CATEGORIES ================= */
 
-function renderPrayerCategories() {
+async function renderPrayerCategories() {
+  const myToken = renderToken;
+  app.innerHTML = loadingHtml('疏文办理');
+  let categories;
+  try { categories = await ensurePrayers(); } catch (e) { if (myToken === renderToken) app.innerHTML = errorHtml('疏文办理', null, e.message); return; }
+  if (myToken !== renderToken) return;
+
   app.innerHTML = `
     ${header('疏文办理')}
     <div class="page-body">
       <div class="section-title"><h2>请选择疏文分类</h2></div>
       <div class="cat-grid">
-        ${PRAYER_CATEGORIES.map((c) => `
+        ${categories.map((c) => `
           <div class="cat-card" data-nav="#/prayers/${c.id}">
             <div class="cat-icon">${icon(c.icon)}</div>
             <div class="cat-name">${c.name}</div>
@@ -288,8 +326,14 @@ function renderPrayerCategories() {
   `;
 }
 
-function renderPrayerTypes(catId) {
-  const c = findCategory(catId);
+async function renderPrayerTypes(catId) {
+  const myToken = renderToken;
+  app.innerHTML = loadingHtml('疏文办理', '#/prayers');
+  let categories;
+  try { categories = await ensurePrayers(); } catch (e) { if (myToken === renderToken) app.innerHTML = errorHtml('疏文办理', '#/prayers', e.message); return; }
+  if (myToken !== renderToken) return;
+
+  const c = categories.find((x) => x.id === catId);
   if (!c) { nav('#/prayers'); return; }
   app.innerHTML = `
     ${header(c.name, { back: '#/prayers' })}
@@ -309,35 +353,43 @@ function renderPrayerTypes(catId) {
     </div>
   `;
   app.querySelectorAll('[data-type]').forEach((b) => {
-    b.addEventListener('click', () => {
-      const t = findPrayerType(b.dataset.type);
-      nav(`#/prayer-apply/${t.id}`);
-    });
+    b.addEventListener('click', () => nav(`#/prayer-apply/${b.dataset.type}`));
   });
 }
 
 /* ================= APPLY / FILL INFO FORM ================= */
 
-function renderApplyForm(kind, refId) {
+async function renderApplyForm(kind, refId) {
+  if (!requireAuth(`#/${kind === 'event' ? `events/${refId}/apply` : `prayer-apply/${refId}`}`)) return;
+
+  const myToken = renderToken;
   let title, items;
+
   if (kind === 'event') {
-    const e = findEvent(refId);
+    app.innerHTML = loadingHtml('填写资料', `#/events/${refId}`);
+    let events;
+    try { events = await ensureEvents(); } catch (e) { if (myToken === renderToken) app.innerHTML = errorHtml('填写资料', `#/events/${refId}`, e.message); return; }
+    if (myToken !== renderToken) return;
+    const e = events.find((ev) => ev.id === refId);
     if (!e || !STATE.cart || STATE.cart.kind !== 'event') { nav(`#/events/${refId}`); return; }
     title = e.title;
     items = STATE.cart.items;
   } else {
-    const t = findPrayerType(refId);
+    app.innerHTML = loadingHtml('填写资料', '#/prayers');
+    let categories;
+    try { categories = await ensurePrayers(); } catch (e) { if (myToken === renderToken) app.innerHTML = errorHtml('填写资料', '#/prayers', e.message); return; }
+    if (myToken !== renderToken) return;
+    const t = findPrayerType(categories, refId);
     if (!t) { nav('#/prayers'); return; }
     if (!STATE.cart || STATE.cart.kind !== 'prayer' || STATE.cart.refId !== t.id) {
       newCart('prayer', t);
       STATE.cart.items = [{ id: t.id, name: t.name, price: t.price, qty: 1 }];
-      saveState();
     }
     title = t.name;
     items = STATE.cart.items;
   }
 
-  const main = STATE.cart.main || {};
+  const main = STATE.cart.main || { name: STATE.auth.user?.name || '', phone: STATE.auth.user?.phone || '' };
   const members = STATE.cart.members || [];
   const total = cartTotal();
 
@@ -381,14 +433,12 @@ function renderApplyForm(kind, refId) {
     if (!name) return;
     STATE.cart.members = STATE.cart.members || [];
     STATE.cart.members.push({ name, idnum: '' });
-    saveState();
     renderApplyForm(kind, refId);
   });
 
   app.querySelectorAll('[data-del-member]').forEach((b) => {
     b.addEventListener('click', () => {
       STATE.cart.members.splice(Number(b.dataset.delMember), 1);
-      saveState();
       renderApplyForm(kind, refId);
     });
   });
@@ -404,7 +454,6 @@ function renderApplyForm(kind, refId) {
       addr: document.getElementById('f-addr').value.trim(),
       phone,
     };
-    saveState();
     nav('#/confirm');
   });
 }
@@ -414,6 +463,7 @@ function renderApplyForm(kind, refId) {
 let payMethod = 'fpx';
 
 function renderConfirm() {
+  if (!requireAuth('#/confirm')) return;
   if (!STATE.cart || !STATE.cart.main) { nav('#/home'); return; }
   const cart = STATE.cart;
   const total = cartTotal();
@@ -471,31 +521,44 @@ function renderConfirm() {
     row.addEventListener('click', () => { payMethod = row.dataset.pm; renderConfirm(); });
   });
 
-  document.getElementById('pay-btn').addEventListener('click', () => {
-    const order = {
-      id: nextOrderNo(),
-      title: cart.refTitle,
-      kind: cart.kind,
-      items: cart.items,
-      main: cart.main,
-      members: cart.members,
-      total,
-      payMethod,
-      status: 'paid',
-      createdAt: new Date().toISOString(),
-    };
-    STATE.orders.unshift(order);
-    STATE.cart = null;
-    saveState();
-    nav(`#/success/${order.id}`);
+  document.getElementById('pay-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('pay-btn');
+    btn.setAttribute('disabled', 'true');
+    btn.textContent = '处理中…';
+    try {
+      const { order } = await api('/orders', {
+        method: 'POST',
+        body: {
+          kind: cart.kind,
+          refId: cart.refId,
+          refTitle: cart.refTitle,
+          items: cart.items,
+          main: cart.main,
+          members: cart.members,
+          payMethod,
+        },
+      });
+      STATE.cart = null;
+      nav(`#/success/${order.id}`);
+    } catch (err) {
+      toast(err.message || '下单失败，请重试');
+      btn.removeAttribute('disabled');
+      btn.textContent = `确认付款 ${fmt(total)}`;
+    }
   });
 }
 
 /* ================= PAYMENT SUCCESS ================= */
 
-function renderSuccess(orderId) {
-  const order = STATE.orders.find((o) => o.id === orderId);
-  if (!order) { nav('#/home'); return; }
+async function renderSuccess(orderNo) {
+  if (!requireAuth(`#/success/${orderNo}`)) return;
+  const myToken = renderToken;
+  app.innerHTML = loadingHtml('付款成功');
+  let order;
+  try { ({ order } = await api(`/orders/${orderNo}`)); } catch (e) { if (myToken === renderToken) nav('#/home'); return; }
+  if (myToken !== renderToken) return;
+
+  const methodLabel = { fpx: 'FPX Online Banking', grabpay: 'GrabPay', tng: "Touch 'n Go eWallet" }[order.payMethod];
   app.innerHTML = `
     ${header('付款成功')}
     <div class="page-body">
@@ -507,8 +570,8 @@ function renderSuccess(orderId) {
           <div class="r-row"><span>订单编号</span><b>${order.id}</b></div>
           <div class="r-row"><span>法会/事项</span><b>${order.title}</b></div>
           <div class="r-row"><span>金额</span><b>${fmt(order.total)}</b></div>
-          <div class="r-row"><span>付款方式</span><b>${{ fpx: 'FPX Online Banking', grabpay: 'GrabPay', tng: "Touch 'n Go eWallet" }[order.payMethod]}</b></div>
-          <div class="r-row"><span>付款时间</span><b>${new Date(order.createdAt).toLocaleString('zh-CN', { hour12: false })}</b></div>
+          <div class="r-row"><span>付款方式</span><b>${methodLabel}</b></div>
+          <div class="r-row"><span>付款时间</span><b>${new Date(order.createdAt.replace(' ', 'T') + 'Z').toLocaleString('zh-CN', { hour12: false })}</b></div>
         </div>
         <button class="btn gold block" data-nav="#/orders/${order.id}" style="margin-bottom:10px">查看订单</button>
         <button class="btn ghost block" data-nav="#/home">返回首页</button>
@@ -521,9 +584,16 @@ function renderSuccess(orderId) {
 
 let orderFilter = 'all';
 
-function renderOrders() {
+async function renderOrders() {
+  if (!requireAuth('#/orders')) return;
+  const myToken = renderToken;
+  app.innerHTML = loadingHtml('我的订单');
+  let orders;
+  try { ({ orders } = await api('/orders')); } catch (e) { if (myToken === renderToken) app.innerHTML = errorHtml('我的订单', null, e.message); return; }
+  if (myToken !== renderToken) return;
+
   const filters = [['all', '全部'], ['paid', '已付款'], ['pending', '待付款']];
-  const list = orderFilter === 'all' ? STATE.orders : STATE.orders.filter((o) => o.status === orderFilter);
+  const list = orderFilter === 'all' ? orders : orders.filter((o) => o.status === orderFilter);
   app.innerHTML = `
     ${header('我的订单')}
     <div class="page-body">
@@ -543,7 +613,7 @@ function orderCardHtml(o) {
       <div class="oc-title">${o.title}</div>
       <div class="oc-status ${o.status}">${o.status === 'paid' ? '已付款' : '待付款'}</div>
     </div>
-    <div class="oc-meta">订单编号：${o.id} · ${new Date(o.createdAt).toLocaleDateString('zh-CN')}</div>
+    <div class="oc-meta">订单编号：${o.id} · ${o.createdAt.slice(0, 10)}</div>
     <div class="oc-foot">
       <span style="font-size:11px;color:var(--text-faint)">${o.items.length} 项，主事人：${o.main.name}</span>
       <span class="oc-amt">${fmt(o.total)}</span>
@@ -551,30 +621,36 @@ function orderCardHtml(o) {
   </div>`;
 }
 
-function renderOrderDetail(id) {
-  const o = STATE.orders.find((x) => x.id === id);
-  if (!o) { nav('#/orders'); return; }
+async function renderOrderDetail(orderNo) {
+  if (!requireAuth(`#/orders/${orderNo}`)) return;
+  const myToken = renderToken;
+  app.innerHTML = loadingHtml('订单详情', '#/orders');
+  let order;
+  try { ({ order } = await api(`/orders/${orderNo}`)); } catch (e) { if (myToken === renderToken) app.innerHTML = errorHtml('订单详情', '#/orders', e.message); return; }
+  if (myToken !== renderToken) return;
+
+  const methodLabel = { fpx: 'FPX Online Banking', grabpay: 'GrabPay', tng: "Touch 'n Go eWallet" }[order.payMethod];
   app.innerHTML = `
     ${header('订单详情', { back: '#/orders' })}
     <div class="page-body">
       <div class="form-card">
-        <div class="fc-title">${o.title}</div>
-        ${o.items.map((i) => `<div class="summary-row"><span>${i.name}</span><span>${fmt(i.price)}</span></div>`).join('')}
-        <div class="summary-row total"><span>合计</span><b>${fmt(o.total)}</b></div>
+        <div class="fc-title">${order.title}</div>
+        ${order.items.map((i) => `<div class="summary-row"><span>${i.name}</span><span>${fmt(i.price)}</span></div>`).join('')}
+        <div class="summary-row total"><span>合计</span><b>${fmt(order.total)}</b></div>
       </div>
       <div class="form-card">
         <div class="fc-title">主事人资料</div>
-        <div class="detail-list-row"><span>姓名</span><b>${o.main.name}</b></div>
-        <div class="detail-list-row"><span>身份证号</span><b>${o.main.idnum || '-'}</b></div>
-        <div class="detail-list-row"><span>联系电话</span><b>${o.main.phone}</b></div>
-        ${o.members.length ? `<div class="detail-list-row"><span>家人</span><b>${o.members.map((m) => m.name).join('、')}</b></div>` : ''}
+        <div class="detail-list-row"><span>姓名</span><b>${order.main.name}</b></div>
+        <div class="detail-list-row"><span>身份证号</span><b>${order.main.idnum || '-'}</b></div>
+        <div class="detail-list-row"><span>联系电话</span><b>${order.main.phone}</b></div>
+        ${order.members.length ? `<div class="detail-list-row"><span>家人</span><b>${order.members.map((m) => m.name).join('、')}</b></div>` : ''}
       </div>
       <div class="form-card">
         <div class="fc-title">订单信息</div>
-        <div class="detail-list-row"><span>订单编号</span><b>${o.id}</b></div>
-        <div class="detail-list-row"><span>下单时间</span><b>${new Date(o.createdAt).toLocaleString('zh-CN', { hour12: false })}</b></div>
-        <div class="detail-list-row"><span>付款方式</span><b>${{ fpx: 'FPX Online Banking', grabpay: 'GrabPay', tng: "Touch 'n Go eWallet" }[o.payMethod]}</b></div>
-        <div class="detail-list-row"><span>订单状态</span><b>${o.status === 'paid' ? '已付款' : '待付款'}</b></div>
+        <div class="detail-list-row"><span>订单编号</span><b>${order.id}</b></div>
+        <div class="detail-list-row"><span>下单时间</span><b>${order.createdAt}</b></div>
+        <div class="detail-list-row"><span>付款方式</span><b>${methodLabel}</b></div>
+        <div class="detail-list-row"><span>订单状态</span><b>${order.status === 'paid' ? '已付款' : '待付款'}</b></div>
       </div>
       <button class="btn ghost block" data-nav="#/orders">返回订单列表</button>
     </div>
@@ -584,6 +660,22 @@ function renderOrderDetail(id) {
 /* ================= ME ================= */
 
 function renderMe() {
+  if (!isLoggedIn()) {
+    app.innerHTML = `
+      ${header('我的')}
+      <div class="page-body">
+        <div class="empty-state">
+          <div class="es-icon">${'✦'}</div>
+          <div>登录后即可报名法会、办理疏文并查看订单</div>
+        </div>
+        <button class="btn gold block" data-nav="#/login" style="margin-bottom:10px">登录</button>
+        <button class="btn ghost block" data-nav="#/register">注册新账号</button>
+      </div>
+    `;
+    return;
+  }
+
+  const user = STATE.auth.user;
   const menu = [
     ['user', '我的资料'],
     ['orders', '办理记录 / 疏文查询'],
@@ -595,10 +687,10 @@ function renderMe() {
     ${header('我的')}
     <div class="page-body">
       <div class="profile-hero">
-        <div class="profile-avatar">信</div>
+        <div class="profile-avatar">${(user.name || '信')[0]}</div>
         <div>
-          <div class="profile-name">尊贵信众</div>
-          <div class="profile-sub">诚心所愿 · 玄坛护佑</div>
+          <div class="profile-name">${user.name}</div>
+          <div class="profile-sub">${user.phone || user.email}</div>
         </div>
       </div>
       <div class="menu-list">
@@ -607,6 +699,7 @@ function renderMe() {
             ${icon(ic)}<span>${label}</span><span class="mi-arrow">›</span>
           </div>
         `).join('')}
+        <div class="menu-item" id="logout-btn">${icon('logout')}<span>退出登录</span><span class="mi-arrow">›</span></div>
       </div>
       <div class="trust-strip">
         <div class="ti">${icon('online')}<span>随时随地办法会</span></div>
@@ -617,6 +710,91 @@ function renderMe() {
       </div>
     </div>
   `;
+  document.getElementById('logout-btn').addEventListener('click', () => {
+    clearAuth();
+    toast('已退出登录');
+    nav('#/home');
+  });
+}
+
+/* ================= LOGIN / REGISTER ================= */
+
+function renderLogin() {
+  app.innerHTML = `
+    ${header('登录', { back: '#/me' })}
+    <div class="page-body">
+      <div class="hero" style="margin-bottom:20px">
+        <div class="hero-eyebrow">灵一守玄坛</div>
+        <div class="hero-title" style="font-size:16px">欢迎回来</div>
+        <div class="hero-sub">登录后即可报名法会、办理疏文</div>
+      </div>
+      <div class="form-card">
+        <div class="field"><label>邮箱</label><input id="l-email" type="email" placeholder="请输入邮箱" /></div>
+        <div class="field"><label>密码</label><input id="l-password" type="password" placeholder="请输入密码" /></div>
+      </div>
+      <button class="btn gold block" id="login-btn" style="margin-bottom:14px">登录</button>
+      <button class="btn ghost block" data-nav="#/register">还没有账号？立即注册</button>
+    </div>
+  `;
+  document.getElementById('login-btn').addEventListener('click', async () => {
+    const email = document.getElementById('l-email').value.trim();
+    const password = document.getElementById('l-password').value;
+    if (!email || !password) { toast('请输入邮箱与密码'); return; }
+    const btn = document.getElementById('login-btn');
+    btn.setAttribute('disabled', 'true');
+    try {
+      const { token, user } = await api('/auth/login', { method: 'POST', body: { email, password } });
+      setAuth(token, user);
+      toast('登录成功');
+      const next = pendingNav; pendingNav = null;
+      nav(next || '#/me');
+    } catch (err) {
+      toast(err.message || '登录失败');
+    } finally {
+      btn.removeAttribute('disabled');
+    }
+  });
+}
+
+function renderRegister() {
+  app.innerHTML = `
+    ${header('注册', { back: '#/me' })}
+    <div class="page-body">
+      <div class="hero" style="margin-bottom:20px">
+        <div class="hero-eyebrow">灵一守玄坛</div>
+        <div class="hero-title" style="font-size:16px">创建账号</div>
+        <div class="hero-sub">诚心所愿 · 玄坛护佑</div>
+      </div>
+      <div class="form-card">
+        <div class="field"><label>姓名</label><input id="r-name" placeholder="请输入姓名" /></div>
+        <div class="field"><label>邮箱</label><input id="r-email" type="email" placeholder="请输入邮箱" /></div>
+        <div class="field"><label>联系电话</label><input id="r-phone" placeholder="请输入联系电话" /></div>
+        <div class="field"><label>密码</label><input id="r-password" type="password" placeholder="至少 6 位密码" /></div>
+      </div>
+      <button class="btn gold block" id="register-btn" style="margin-bottom:14px">注册</button>
+      <button class="btn ghost block" data-nav="#/login">已有账号？立即登录</button>
+    </div>
+  `;
+  document.getElementById('register-btn').addEventListener('click', async () => {
+    const name = document.getElementById('r-name').value.trim();
+    const email = document.getElementById('r-email').value.trim();
+    const phone = document.getElementById('r-phone').value.trim();
+    const password = document.getElementById('r-password').value;
+    if (!name || !email || !password) { toast('请填写姓名、邮箱与密码'); return; }
+    const btn = document.getElementById('register-btn');
+    btn.setAttribute('disabled', 'true');
+    try {
+      const { token, user } = await api('/auth/register', { method: 'POST', body: { name, email, phone, password } });
+      setAuth(token, user);
+      toast('注册成功');
+      const next = pendingNav; pendingNav = null;
+      nav(next || '#/me');
+    } catch (err) {
+      toast(err.message || '注册失败');
+    } finally {
+      btn.removeAttribute('disabled');
+    }
+  });
 }
 
 /* ================= INIT ================= */

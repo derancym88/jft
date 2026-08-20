@@ -1,0 +1,30 @@
+{
+  "name": "jft",
+  "version": "1.0.0",
+  "description": "灵一守玄坛 — 法会报名与疏文办理 PWA (Node.js + Express + SQLite)",
+  "main": "server/index.js",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/derancym88/jft.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/derancym88/jft/issues"
+  },
+  "homepage": "https://github.com/derancym88/jft#readme",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3"
+  }
+}
