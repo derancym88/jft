@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<title>灵一守玄坛</title>
+<meta name="description" content="灵一守玄坛 · 法会报名与疏文办理 PWA" />
+<meta name="theme-color" content="#1a1210" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="灵一守玄坛" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div id="app" class="app-shell"></div>
+
+<nav class="tabbar" id="tabbar">
+  <button class="tab-btn" data-route="#/home">
+    <svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg>
+    <span>首页</span>
+  </button>
+  <button class="tab-btn" data-route="#/events">
+    <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 3v4M16 3v4"/></svg>
+    <span>法会</span>
+  </button>
+  <button class="tab-btn" data-route="#/prayers">
+    <svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M9 12h6M9 16h6M9 8h3"/></svg>
+    <span>疏文</span>
+  </button>
+  <button class="tab-btn" data-route="#/orders">
+    <svg viewBox="0 0 24 24"><path d="M4 7h16l-1.5 12.2a1 1 0 0 1-1 .8H6.5a1 1 0 0 1-1-.8L4 7Z"/><path d="M8 7V6a4 4 0 0 1 8 0v1"/></svg>
+    <span>订单</span>
+  </button>
+  <button class="tab-btn" data-route="#/me">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>
+    <span>我的</span>
+  </button>
+</nav>
+
+<div id="toast" class="toast"></div>
+
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
