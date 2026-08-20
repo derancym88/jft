@@ -553,28 +553,82 @@ async function renderOrders(main) {
   `;
 }
 
-/* ================= MEMBERS (read-only) ================= */
+/* ================= MEMBERS ================= */
+
+function memberFormHtml(id, m) {
+  return `
+    <div class="form-grid">
+      <div class="field"><label>姓名</label><input id="mf-name-${id}" value="${esc(m.name || '')}" /></div>
+      <div class="field"><label>邮箱</label><input id="mf-email-${id}" type="email" value="${esc(m.email || '')}" /></div>
+      <div class="field"><label>电话</label><input id="mf-phone-${id}" value="${esc(m.phone || '')}" /></div>
+      <div class="field"><label>${id === 'new' ? '密码' : '重设密码 (留空则不变)'}</label><input id="mf-password-${id}" type="password" placeholder="${id === 'new' ? '至少 6 位' : '留空则不变'}" /></div>
+    </div>
+    <div class="btn-row"><button class="btn gold sm" id="mf-save-${id}">${id === 'new' ? '创建会员' : '保存'}</button></div>
+  `;
+}
+
+function bindMemberForm(id, existingId) {
+  document.getElementById(`mf-save-${id}`).addEventListener('click', async () => {
+    const name = document.getElementById(`mf-name-${id}`).value.trim();
+    const email = document.getElementById(`mf-email-${id}`).value.trim();
+    const phone = document.getElementById(`mf-phone-${id}`).value.trim();
+    const password = document.getElementById(`mf-password-${id}`).value;
+    if (!name || !email) { toast('请填写姓名与邮箱', true); return; }
+    if (id === 'new' && !password) { toast('请设置密码', true); return; }
+    try {
+      if (existingId) {
+        const body = { name, email, phone };
+        if (password) body.password = password;
+        await api(`/admin/members/${existingId}`, { method: 'PUT', body });
+        toast('已保存');
+      } else {
+        await api('/admin/members', { method: 'POST', body: { name, email, phone, password } });
+        toast('已创建会员');
+      }
+      renderShell();
+    } catch (e) { toast(e.message, true); }
+  });
+}
 
 async function renderMembers(main) {
   const { members } = await api('/admin/members');
   main.innerHTML = `
     ${mainHeader('会员管理', `共 ${members.length} 位会员`)}
     <div class="panel">
+      <div class="panel-title">新增会员</div>
+      ${memberFormHtml('new', {})}
+    </div>
+    <div class="panel">
       <div class="table-wrap">
         <table>
-          <thead><tr><th>姓名</th><th>邮箱</th><th>电话</th><th>订单数</th><th>累计消费</th><th>注册时间</th></tr></thead>
+          <thead><tr><th>姓名</th><th>邮箱</th><th>电话</th><th>订单数</th><th>累计消费</th><th>注册时间</th><th></th></tr></thead>
           <tbody>
             ${members.length ? members.map((m) => `
               <tr>
                 <td>${esc(m.name)}</td><td>${esc(m.email)}</td><td>${esc(m.phone || '-')}</td>
                 <td>${m.order_count}</td><td class="num">${fmt(m.total_spent)}</td><td>${esc(m.created_at)}</td>
+                <td><span class="il-link" data-edit-member="${m.id}">编辑</span></td>
               </tr>
-            `).join('') : `<tr><td colspan="6" class="empty-note">暂无会员</td></tr>`}
+              <tr id="member-edit-row-${m.id}" style="display:none"><td colspan="7"><div id="member-edit-${m.id}"></div></td></tr>
+            `).join('') : `<tr><td colspan="7" class="empty-note">暂无会员</td></tr>`}
           </tbody>
         </table>
       </div>
     </div>
   `;
+  bindMemberForm('new', null);
+  members.forEach((m) => {
+    document.querySelector(`[data-edit-member="${m.id}"]`).addEventListener('click', () => {
+      const row = document.getElementById(`member-edit-row-${m.id}`);
+      const box = document.getElementById(`member-edit-${m.id}`);
+      const show = row.style.display === 'none';
+      row.style.display = show ? '' : 'none';
+      if (show && !box.innerHTML) {
+        box.innerHTML = memberFormHtml(m.id, m);
+        bindMemberForm(m.id, m.id);
+      }
+    });
+  });
 }
 
 /* ================= INIT ================= */

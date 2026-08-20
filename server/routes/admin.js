@@ -1,9 +1,12 @@
 const express = require('express');
+const bcrypt = require('bcryptjs');
 const db = require('../db');
 const { authMiddleware, adminMiddleware } = require('../auth');
 
 const router = express.Router();
 router.use(authMiddleware, adminMiddleware);
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function genId(prefix) {
   return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -231,7 +234,7 @@ router.get('/orders/:orderNo', (req, res) => {
   res.json({ order: { ...order, items, members } });
 });
 
-/* ================= MEMBERS (read-only) ================= */
+/* ================= MEMBERS ================= */
 
 router.get('/members', (req, res) => {
   const members = db
@@ -245,6 +248,58 @@ router.get('/members', (req, res) => {
     `)
     .all();
   res.json({ members });
+});
+
+router.post('/members', (req, res) => {
+  const { name, email, phone, password } = req.body || {};
+  if (!name || !String(name).trim()) return res.status(400).json({ error: '请输入姓名' });
+  if (!email || !EMAIL_RE.test(String(email).trim())) return res.status(400).json({ error: '请输入有效的邮箱' });
+  if (!password || String(password).length < 6) return res.status(400).json({ error: '密码至少需要 6 位' });
+
+  const emailNorm = String(email).trim().toLowerCase();
+  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(emailNorm);
+  if (existing) return res.status(409).json({ error: '该邮箱已被注册' });
+
+  const passwordHash = bcrypt.hashSync(String(password), 10);
+  const info = db
+    .prepare("INSERT INTO users (name, email, phone, password_hash, role) VALUES (?, ?, ?, ?, 'member')")
+    .run(String(name).trim(), emailNorm, phone ? String(phone).trim() : null, passwordHash);
+
+  const member = db
+    .prepare('SELECT id, name, email, phone, created_at, 0 AS order_count, 0 AS total_spent FROM users WHERE id = ?')
+    .get(info.lastInsertRowid);
+  res.status(201).json({ member });
+});
+
+router.put('/members/:id', (req, res) => {
+  const user = db.prepare("SELECT * FROM users WHERE id = ? AND role = 'member'").get(req.params.id);
+  if (!user) return res.status(404).json({ error: '会员不存在' });
+
+  const { name, email, phone, password } = req.body || {};
+  let emailNorm = user.email;
+  if (email !== undefined) {
+    if (!EMAIL_RE.test(String(email).trim())) return res.status(400).json({ error: '请输入有效的邮箱' });
+    emailNorm = String(email).trim().toLowerCase();
+    const conflict = db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(emailNorm, user.id);
+    if (conflict) return res.status(409).json({ error: '该邮箱已被其他账号使用' });
+  }
+  if (password !== undefined && password !== '' && String(password).length < 6) {
+    return res.status(400).json({ error: '密码至少需要 6 位' });
+  }
+
+  const passwordHash = password ? bcrypt.hashSync(String(password), 10) : user.password_hash;
+  db.prepare('UPDATE users SET name = ?, email = ?, phone = ?, password_hash = ? WHERE id = ?')
+    .run(name !== undefined ? String(name).trim() : user.name, emailNorm, phone !== undefined ? String(phone).trim() : user.phone, passwordHash, user.id);
+
+  const member = db
+    .prepare(`
+      SELECT u.id, u.name, u.email, u.phone, u.created_at,
+        COUNT(o.id) AS order_count, COALESCE(SUM(o.total), 0) AS total_spent
+      FROM users u LEFT JOIN orders o ON o.user_id = u.id AND o.status = 'paid'
+      WHERE u.id = ? GROUP BY u.id
+    `)
+    .get(user.id);
+  res.json({ member });
 });
 
 module.exports = router;
