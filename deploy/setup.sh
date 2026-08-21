@@ -75,8 +75,13 @@ fi
 mkdir -p data
 
 # ---- nginx site ----
-echo "-- configuring nginx reverse proxy on :80 -> :8765 --"
-cp deploy/nginx-jft.conf /etc/nginx/sites-available/jft
+if [ -f /etc/nginx/sites-available/jft ] && grep -q "ssl_certificate" /etc/nginx/sites-available/jft; then
+  echo "-- nginx site already has SSL configured (certbot) — leaving it as-is --"
+  echo "   (run deploy/enable-ssl.sh again yourself if you need to change the domain)"
+else
+  echo "-- configuring nginx reverse proxy on :80 -> :8765 --"
+  cp deploy/nginx-jft.conf /etc/nginx/sites-available/jft
+fi
 ln -sf /etc/nginx/sites-available/jft /etc/nginx/sites-enabled/jft
 rm -f /etc/nginx/sites-enabled/default
 nginx -t
@@ -86,6 +91,7 @@ systemctl reload nginx || systemctl restart nginx
 # ---- firewall (best-effort, only if ufw is active) ----
 if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
   ufw allow 80/tcp || true
+  ufw allow 443/tcp || true
 fi
 
 # ---- start/restart the app under pm2 ----

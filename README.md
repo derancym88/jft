@@ -130,6 +130,44 @@ Useful commands on the server: `pm2 status`, `pm2 logs jft`, `pm2 restart jft`.
 103.253.24.144`). If you point a domain at the server later, update
 `server_name` and add TLS with `certbot --nginx`.
 
+### HTTPS (required for the PWA to install properly on a phone)
+
+Plain `http://<ip>/` works fine in a mobile browser for just *viewing* the
+site, but "Add to Home Screen" / service worker registration needs a secure
+context — bare-IP HTTP doesn't qualify on most browsers. `deploy/enable-ssl.sh`
+gets a free Let's Encrypt certificate and switches nginx to HTTPS (with an
+http → https redirect):
+
+```bash
+cd ~/jft && git pull
+sudo bash deploy/enable-ssl.sh
+```
+
+By default it uses `103-253-24-144.sslip.io` — a free wildcard-DNS service
+where any subdomain encoding an IP resolves straight to that IP, no signup
+or DNS record needed. Then visit `https://103-253-24-144.sslip.io/` on the
+phone and "Add to Home Screen" should work normally.
+
+To use a real domain instead: point its `A` record at `103.253.24.144`
+first, then run `sudo bash deploy/enable-ssl.sh yourdomain.com`.
+
+Note: this only fixes the *HTTPS-for-installability* requirement. If the
+site is unreachable from outside at all (times out from a phone even over
+plain `http://`), that's a separate networking issue — see the
+troubleshooting note below.
+
+### If the app is unreachable from outside (times out, but works via
+`curl localhost` on the server)
+
+`ufw` allowing port 80/443 only controls the OS firewall. Most cloud
+providers (DigitalOcean, AWS, Vultr, Alibaba Cloud, etc.) also have a
+**separate network-level firewall / security group** in front of the VM —
+if that doesn't also allow inbound TCP 80/443, external traffic is silently
+dropped even though everything looks fine from inside the box. Run
+`curl -s ipinfo.io` on the server to identify the provider, then check that
+provider's dashboard for a "Firewall" / "Security Group" / "Network
+Security" section.
+
 ## API summary
 
 | Method | Path                      | Auth | Description                        |
