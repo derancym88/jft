@@ -188,6 +188,7 @@ const routes = [
   [/^#\/login$/, () => renderLogin()],
   [/^#\/register$/, () => renderRegister()],
   [/^#\/notifications$/, () => renderNotifications()],
+  [/^#\/profile$/, () => renderProfile()],
 ];
 
 function router() {
@@ -205,7 +206,7 @@ function syncTabbar(hash) {
   if (hash.startsWith('#/events')) key = '#/events';
   else if (hash.startsWith('#/prayers') || hash.startsWith('#/prayer-apply')) key = '#/prayers';
   else if (hash.startsWith('#/orders')) key = '#/orders';
-  else if (hash.startsWith('#/me') || hash.startsWith('#/login') || hash.startsWith('#/register')) key = '#/me';
+  else if (hash.startsWith('#/me') || hash.startsWith('#/login') || hash.startsWith('#/register') || hash.startsWith('#/profile')) key = '#/me';
   else if (hash.startsWith('#/notifications')) key = '#/home';
 
   const hideTabbar = hash.startsWith('#/confirm') || hash.startsWith('#/success');
@@ -771,6 +772,8 @@ async function renderOrderDetail(orderNo) {
         <div class="fc-title">主事人资料</div>
         <div class="detail-list-row"><span>姓名</span><b>${order.main.name}</b></div>
         <div class="detail-list-row"><span>身份证号</span><b>${order.main.idnum || '-'}</b></div>
+        <div class="detail-list-row"><span>出生日期</span><b>${order.main.dob || '-'}</b></div>
+        <div class="detail-list-row"><span>联系地址</span><b>${order.main.addr || '-'}</b></div>
         <div class="detail-list-row"><span>联系电话</span><b>${order.main.phone}</b></div>
         ${order.members.length ? `<div class="detail-list-row"><span>家人</span><b>${order.members.map((m) => m.name).join('、')}</b></div>` : ''}
       </div>
@@ -861,7 +864,7 @@ function renderMe() {
     ['cs', '联系客服'],
     ['about', '关于我们'],
   ];
-  const menuNav = { '办理记录 / 疏文查询': '#/orders', '消息通知': '#/notifications' };
+  const menuNav = { '我的资料': '#/profile', '办理记录 / 疏文查询': '#/orders', '消息通知': '#/notifications' };
   app.innerHTML = `
     ${header('我的')}
     <div class="page-body">
@@ -893,6 +896,57 @@ function renderMe() {
     clearAuth();
     toast('已退出登录');
     nav('#/home');
+  });
+}
+
+/* ================= PROFILE ================= */
+
+function renderProfile() {
+  if (!requireAuth('#/profile')) return;
+  const user = STATE.auth.user;
+  app.innerHTML = `
+    ${header('我的资料', { back: '#/me' })}
+    <div class="page-body">
+      <div class="form-card">
+        <div class="fc-title">账号信息</div>
+        <div class="field"><label>姓名</label><input id="p-name" value="${user.name || ''}" /></div>
+        <div class="field"><label>邮箱</label><input value="${user.email || ''}" disabled /></div>
+        <div class="field"><label>联系电话</label><input id="p-phone" value="${user.phone || ''}" placeholder="请输入联系电话" /></div>
+        <div class="detail-list-row"><span>注册时间</span><b>${user.createdAt || '-'}</b></div>
+      </div>
+      <button class="btn gold block" id="save-profile-btn" style="margin-bottom:14px">保存</button>
+
+      <div class="form-card">
+        <div class="fc-title">修改密码</div>
+        <div class="field"><label>当前密码</label><input id="p-current-pw" type="password" placeholder="不修改密码可留空" /></div>
+        <div class="field"><label>新密码</label><input id="p-new-pw" type="password" placeholder="至少 6 位" /></div>
+      </div>
+      <button class="btn ghost block" id="save-password-btn">修改密码</button>
+    </div>
+  `;
+
+  document.getElementById('save-profile-btn').addEventListener('click', async () => {
+    const name = document.getElementById('p-name').value.trim();
+    const phone = document.getElementById('p-phone').value.trim();
+    if (!name) { toast('请输入姓名'); return; }
+    try {
+      const { user: updated } = await api('/auth/me', { method: 'PUT', body: { name, phone } });
+      setAuth(STATE.auth.token, updated);
+      toast('资料已保存');
+      renderProfile();
+    } catch (e) { toast(e.message || '保存失败'); }
+  });
+
+  document.getElementById('save-password-btn').addEventListener('click', async () => {
+    const currentPassword = document.getElementById('p-current-pw').value;
+    const newPassword = document.getElementById('p-new-pw').value;
+    if (!currentPassword || !newPassword) { toast('请输入当前密码与新密码'); return; }
+    try {
+      const { user: updated } = await api('/auth/me', { method: 'PUT', body: { currentPassword, newPassword } });
+      setAuth(STATE.auth.token, updated);
+      toast('密码已修改');
+      renderProfile();
+    } catch (e) { toast(e.message || '修改失败'); }
   });
 }
 

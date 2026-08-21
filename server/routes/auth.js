@@ -9,7 +9,7 @@ const router = express.Router();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function publicUser(row) {
-  return { id: row.id, name: row.name, email: row.email, phone: row.phone, role: row.role };
+  return { id: row.id, name: row.name, email: row.email, phone: row.phone, role: row.role, createdAt: row.created_at };
 }
 
 router.post('/register', (req, res) => {
@@ -55,6 +55,31 @@ router.get('/me', authMiddleware, (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId);
   if (!user) return res.status(404).json({ error: '用户不存在' });
   res.json({ user: publicUser(user) });
+});
+
+router.put('/me', authMiddleware, (req, res) => {
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId);
+  if (!user) return res.status(404).json({ error: '用户不存在' });
+
+  const { name, phone, currentPassword, newPassword } = req.body || {};
+  let passwordHash = user.password_hash;
+  if (newPassword) {
+    if (!currentPassword || !bcrypt.compareSync(String(currentPassword), user.password_hash)) {
+      return res.status(401).json({ error: '当前密码不正确' });
+    }
+    if (String(newPassword).length < 6) return res.status(400).json({ error: '新密码至少需要 6 位' });
+    passwordHash = bcrypt.hashSync(String(newPassword), 10);
+  }
+
+  db.prepare('UPDATE users SET name = ?, phone = ?, password_hash = ? WHERE id = ?').run(
+    name !== undefined && String(name).trim() ? String(name).trim() : user.name,
+    phone !== undefined ? String(phone).trim() : user.phone,
+    passwordHash,
+    user.id
+  );
+
+  const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
+  res.json({ user: publicUser(updated) });
 });
 
 module.exports = router;
