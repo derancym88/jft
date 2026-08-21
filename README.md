@@ -168,6 +168,48 @@ dropped even though everything looks fine from inside the box. Run
 provider's dashboard for a "Firewall" / "Security Group" / "Network
 Security" section.
 
+## Android APK (Trusted Web Activity)
+
+For a real, shareable `.apk` instead of relying on the browser's "Add to
+Home Screen" — installs as a normal app icon, no browser address bar, can be
+sent directly via file share / WhatsApp / etc., no Play Store needed.
+
+Building this requires the Android SDK, which can't be fetched from the
+environment this repo was developed in (its network egress is locked to an
+allowlist that excludes `dl.google.com`). Use
+**[PWABuilder](https://www.pwabuilder.com)** instead — it runs the same
+underlying tool ([Bubblewrap](https://github.com/GoogleChromeLabs/bubblewrap))
+on infrastructure that *can* reach Google's servers, entirely through a web
+UI, no local Android tooling needed:
+
+1. Go to pwabuilder.com and enter the site's HTTPS URL (e.g.
+   `https://103-253-24-144.sslip.io/`). It scores the manifest, service
+   worker, and icons — fix anything it flags red first (usually a missing
+   asset or a manifest field) since that's also what makes Chrome offer a
+   real "Install app" instead of a plain shortcut.
+2. **Package for Stores → Android** → download the generated `.apk`. It's
+   signed and ready to share directly; no Play Store submission required.
+3. For a fully "trusted" fullscreen experience (no browser chrome/URL bar
+   at all), PWABuilder also generates a **Digital Asset Links** SHA-256
+   fingerprint. Paste it into `public/.well-known/assetlinks.json`
+   (currently an empty `[]` placeholder) in this format:
+
+   ```json
+   [{
+     "relation": ["delegate_permission/common.handle_all_urls"],
+     "target": {
+       "namespace": "android_app",
+       "package_name": "<the package name PWABuilder generated, e.g. com.example.lyszt.twa>",
+       "sha256_cert_fingerprints": ["<the fingerprint PWABuilder gave you>"]
+     }
+   }]
+   ```
+
+   then redeploy (`git pull && pm2 restart jft`). The server already serves
+   `.well-known/` correctly (`dotfiles: 'allow'` in `server/index.js` — by
+   default Express silently ignores dotfile paths, which would otherwise
+   break Digital Asset Links verification).
+
 ## API summary
 
 | Method | Path                      | Auth | Description                        |

@@ -24,7 +24,10 @@ app.use('/api/admin', adminRoutes);
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 
-app.use(express.static(PUBLIC_DIR));
+// dotfiles: 'allow' is needed so /.well-known/assetlinks.json (Digital Asset
+// Links, for a TWA/Android APK wrapper to verify as "trusted" and drop the
+// browser address bar) actually gets served instead of silently ignored.
+app.use(express.static(PUBLIC_DIR, { dotfiles: 'allow' }));
 app.get('/*splat', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
 
 const PORT = process.env.PORT || 8765;
