@@ -13,9 +13,14 @@
   --success: #3fae5a;
   --danger: #d95c5c;
   --radius: 12px;
+  --shadow-card: 0 4px 14px rgba(180, 180, 180, 0.10), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
 }
 
 * { box-sizing: border-box; }
+
+.stat-card, .entity-card, .login-box, .panel {
+  box-shadow: var(--shadow-card);
+}
 
 html, body {
   margin: 0; padding: 0; height: 100%;

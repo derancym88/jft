@@ -15,11 +15,18 @@
   --success: #3fae5a;
   --radius: 14px;
   --radius-sm: 9px;
+  --shadow-card: 0 4px 14px rgba(180, 180, 180, 0.10), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 * { box-sizing: border-box; }
+
+/* every card-like surface gets a consistent elevation shadow */
+.quick-card, .announce-card, .event-card, .info-card, .cat-card, .type-card,
+.form-card, .receipt, .order-card, .menu-list, .pay-method {
+  box-shadow: var(--shadow-card);
+}
 
 html, body {
   margin: 0;

@@ -22,6 +22,87 @@ function toast(msg) {
 
 function nav(hash) { location.hash = hash; }
 
+/* ---------- lunar (农历) DOB picker ---------- */
+
+const LUNAR_MONTHS = ['正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '腊月'];
+const LUNAR_DAYS = [
+  '初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十',
+  '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十',
+  '廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十',
+];
+const ZODIAC = ['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪'];
+const STEMS = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
+const BRANCHES = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
+
+function lunarYearLabel(y) {
+  const idx = ((y - 4) % 12 + 12) % 12;
+  const stemIdx = ((y - 4) % 10 + 10) % 10;
+  return `${y}年 (${STEMS[stemIdx]}${BRANCHES[idx]}${ZODIAC[idx]}年)`;
+}
+
+function dobFieldHtml(dobState) {
+  return `
+    <div class="field">
+      <label>出生日期</label>
+      <div class="tabs-row" style="margin-bottom:8px">
+        <div class="tab-chip ${dobState.dobType === 'solar' ? 'active' : ''}" data-dob-type="solar">公历</div>
+        <div class="tab-chip ${dobState.dobType === 'lunar' ? 'active' : ''}" data-dob-type="lunar">农历</div>
+      </div>
+      <div id="dob-input-area">${dobInputAreaHtml(dobState)}</div>
+    </div>
+  `;
+}
+
+function dobInputAreaHtml(dobState) {
+  if (dobState.dobType === 'lunar') {
+    const now = new Date().getFullYear();
+    const years = [];
+    for (let y = now; y >= now - 100; y--) years.push(y);
+    return `
+      <div style="display:flex;gap:8px">
+        <select id="f-dob-year" style="flex:1.4">${years.map((y) => `<option value="${y}" ${Number(dobState.dobYear) === y ? 'selected' : ''}>${lunarYearLabel(y)}</option>`).join('')}</select>
+        <select id="f-dob-month" style="flex:1">${LUNAR_MONTHS.map((m, i) => `<option value="${i + 1}" ${Number(dobState.dobMonth) === i + 1 ? 'selected' : ''}>${m}</option>`).join('')}</select>
+        <select id="f-dob-day" style="flex:1">${LUNAR_DAYS.map((d, i) => `<option value="${i + 1}" ${Number(dobState.dobDay) === i + 1 ? 'selected' : ''}>${d}</option>`).join('')}</select>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim);margin-top:8px">
+        <input type="checkbox" id="f-dob-leap" ${dobState.dobLeap ? 'checked' : ''} /> 闰月
+      </label>
+    `;
+  }
+  return `<input id="f-dob-solar" type="date" value="${dobState.dobSolar || ''}" />`;
+}
+
+// Reads whichever sub-fields are currently in the DOM (only one calendar type is mounted at a time)
+// and merges them into dobState, without touching the other calendar type's stored values.
+function syncDobStateFromDom(dobState) {
+  if (dobState.dobType === 'lunar') {
+    dobState.dobYear = Number(document.getElementById('f-dob-year').value);
+    dobState.dobMonth = Number(document.getElementById('f-dob-month').value);
+    dobState.dobDay = Number(document.getElementById('f-dob-day').value);
+    dobState.dobLeap = document.getElementById('f-dob-leap').checked;
+  } else {
+    dobState.dobSolar = document.getElementById('f-dob-solar').value;
+  }
+}
+
+function dobFinalValue(dobState) {
+  if (dobState.dobType === 'lunar') {
+    return `农历${dobState.dobYear}年${dobState.dobLeap ? '闰' : ''}${LUNAR_MONTHS[dobState.dobMonth - 1]}${LUNAR_DAYS[dobState.dobDay - 1]}`;
+  }
+  return dobState.dobSolar || '';
+}
+
+function bindDobField(dobState) {
+  document.querySelectorAll('[data-dob-type]').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      syncDobStateFromDom(dobState);
+      dobState.dobType = chip.dataset.dobType;
+      document.querySelectorAll('[data-dob-type]').forEach((c) => c.classList.toggle('active', c.dataset.dobType === dobState.dobType));
+      document.getElementById('dob-input-area').innerHTML = dobInputAreaHtml(dobState);
+    });
+  });
+}
+
 async function ensureEvents() {
   if (!EVENTS_CACHE) EVENTS_CACHE = (await api('/events')).events;
   return EVENTS_CACHE;
@@ -424,6 +505,15 @@ async function renderApplyForm(kind, refId) {
   const members = STATE.cart.members || [];
   const total = cartTotal();
 
+  const dobState = {
+    dobType: main.dobType || 'solar',
+    dobSolar: main.dobType === 'lunar' ? '' : (main.dob || ''),
+    dobYear: main.dobYear || (new Date().getFullYear() - 30),
+    dobMonth: main.dobMonth || 1,
+    dobDay: main.dobDay || 1,
+    dobLeap: main.dobLeap || false,
+  };
+
   app.innerHTML = `
     ${header('填写资料', { back: kind === 'event' ? `#/events/${refId}` : '#/prayers' })}
     <div class="page-body">
@@ -435,7 +525,7 @@ async function renderApplyForm(kind, refId) {
         <div class="fc-title">主事人资料</div>
         <div class="field"><label>姓名</label><input id="f-name" placeholder="请输入姓名" value="${main.name || ''}" /></div>
         <div class="field"><label>身份证号</label><input id="f-idnum" placeholder="请输入身份证号" value="${main.idnum || ''}" /></div>
-        <div class="field"><label>出生日期</label><input id="f-dob" type="date" value="${main.dob || ''}" /></div>
+        ${dobFieldHtml(dobState)}
         <div class="field"><label>联系地址</label><input id="f-addr" placeholder="请输入联系地址" value="${main.addr || ''}" /></div>
         <div class="field"><label>联系电话</label><input id="f-phone" placeholder="请输入联系电话" value="${main.phone || ''}" /></div>
       </div>
@@ -459,6 +549,8 @@ async function renderApplyForm(kind, refId) {
     </div>
   `;
 
+  bindDobField(dobState);
+
   document.getElementById('add-member-btn').addEventListener('click', () => {
     const name = prompt('请输入家人姓名');
     if (!name) return;
@@ -478,10 +570,16 @@ async function renderApplyForm(kind, refId) {
     const name = document.getElementById('f-name').value.trim();
     const phone = document.getElementById('f-phone').value.trim();
     if (!name || !phone) { toast('请填写姓名与联系电话'); return; }
+    syncDobStateFromDom(dobState);
     STATE.cart.main = {
       name,
       idnum: document.getElementById('f-idnum').value.trim(),
-      dob: document.getElementById('f-dob').value,
+      dob: dobFinalValue(dobState),
+      dobType: dobState.dobType,
+      dobYear: dobState.dobYear,
+      dobMonth: dobState.dobMonth,
+      dobDay: dobState.dobDay,
+      dobLeap: dobState.dobLeap,
       addr: document.getElementById('f-addr').value.trim(),
       phone,
     };
