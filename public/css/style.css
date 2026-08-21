@@ -197,6 +197,12 @@ button { font-family: inherit; }
   white-space: nowrap;
 }
 .announce-card .an-arrow { color: var(--text-faint); flex-shrink: 0; align-self: center; }
+.announce-card .an-icon {
+  flex-shrink: 0; width: 20px; height: 20px; margin-top: 1px;
+  display: flex; align-items: center; justify-content: center;
+}
+.announce-card .an-icon svg { width: 100%; height: 100%; stroke: var(--gold-soft); fill: none; stroke-width: 1.8; }
+.announce-card .an-arrow.an-icon svg { width: 14px; height: 14px; stroke: var(--text-faint); stroke-width: 2.2; cursor: pointer; }
 
 /* ---------- notification bell + list ---------- */
 

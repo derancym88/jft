@@ -22,6 +22,76 @@ function toast(msg) {
 
 function nav(hash) { location.hash = hash; }
 
+/* ---------- install-to-home-screen prompt ---------- */
+
+let deferredInstallPrompt = null;
+let isInstalled = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+const IOS_DISMISS_KEY = 'lyszt_install_ios_dismissed';
+
+function isIOSDevice() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  document.querySelectorAll('[data-install-refresh]').forEach((el) => { el.outerHTML = installBannerHtml(); });
+  bindInstallBanners();
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  isInstalled = true;
+  toast('已安装到主屏幕');
+  document.querySelectorAll('[data-install-refresh]').forEach((el) => el.remove());
+});
+
+function canOfferInstall() {
+  if (isInstalled) return false;
+  if (deferredInstallPrompt) return true;
+  if (isIOSDevice() && localStorage.getItem(IOS_DISMISS_KEY) !== '1') return true;
+  return false;
+}
+
+function installBannerHtml() {
+  if (!canOfferInstall()) return '';
+  if (deferredInstallPrompt) {
+    return `
+    <div class="announce-card" id="install-banner" data-install-refresh>
+      <span class="an-icon">${icon('install')}</span>
+      <div class="an-body">
+        <div class="an-title">安装灵一守玄坛到主屏幕</div>
+        <div class="an-text">离线可用，打开更快捷，如同 App 一样使用</div>
+      </div>
+      <span class="an-arrow">›</span>
+    </div>`;
+  }
+  return `
+  <div class="announce-card" id="install-banner-ios" data-install-refresh>
+    <span class="an-icon">${icon('install')}</span>
+    <div class="an-body">
+      <div class="an-title">安装到主屏幕</div>
+      <div class="an-text">点击底部分享按钮，选择"添加到主屏幕"</div>
+    </div>
+    <span class="an-arrow an-icon" id="install-ios-dismiss">${icon('close')}</span>
+  </div>`;
+}
+
+function bindInstallBanners() {
+  document.getElementById('install-banner')?.addEventListener('click', async () => {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    document.querySelectorAll('[data-install-refresh]').forEach((el) => el.remove());
+  });
+  document.getElementById('install-ios-dismiss')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    localStorage.setItem(IOS_DISMISS_KEY, '1');
+    document.getElementById('install-banner-ios')?.remove();
+  });
+}
+
 /* ---------- lunar (农历) DOB picker ---------- */
 
 const LUNAR_MONTHS = ['正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '腊月'];
@@ -136,6 +206,8 @@ function icon(name) {
     cs: '<path d="M4 12a8 8 0 1 1 16 0v5a2 2 0 0 1-2 2h-1v-6h3M4 17v-5h3v6H6a2 2 0 0 1-2-2Z"/>',
     about: '<circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/>',
     logout: '<path d="M9 21H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
+    install: '<path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"/>',
+    close: '<path d="M6 6l12 12M18 6 6 18"/>',
   };
   return `<svg viewBox="0 0 24 24" fill="none">${paths[name] || ''}</svg>`;
 }
@@ -250,7 +322,7 @@ async function renderHome() {
         <div class="hero-sub">法会报名与疏文办理，一站式线上办理</div>
       </div>
 
-      ${announcements.length ? `<div class="announce-list">${announcements.map(announceCardHtml).join('')}</div>` : ''}
+      ${canOfferInstall() || announcements.length ? `<div class="announce-list">${installBannerHtml()}${announcements.map(announceCardHtml).join('')}</div>` : ''}
 
       <div class="quick-actions">
         <div class="quick-card primary" data-nav="#/events">
@@ -281,6 +353,7 @@ async function renderHome() {
       ${ongoing.map(eventCardHtml).join('')}
     </div>
   `;
+  bindInstallBanners();
 }
 
 function linkTarget(kind, id) {
@@ -502,7 +575,16 @@ async function renderApplyForm(kind, refId) {
     items = STATE.cart.items;
   }
 
-  const main = STATE.cart.main || { name: STATE.auth.user?.name || '', phone: STATE.auth.user?.phone || '' };
+  const main = STATE.cart.main || {
+    name: STATE.auth.user?.name || '',
+    phone: STATE.auth.user?.phone || '',
+    dobType: STATE.auth.user?.dobType,
+    dob: STATE.auth.user?.dob,
+    dobYear: STATE.auth.user?.dobYear,
+    dobMonth: STATE.auth.user?.dobMonth,
+    dobDay: STATE.auth.user?.dobDay,
+    dobLeap: STATE.auth.user?.dobLeap,
+  };
   const members = STATE.cart.members || [];
   const total = cartTotal();
 
@@ -861,6 +943,7 @@ function renderMe() {
     ['orders', '办理记录 / 疏文查询'],
     ['bell', '消息通知'],
     ['remind', '法会提醒'],
+    ...(canOfferInstall() ? [['install', '安装 App 到主屏幕']] : []),
     ['cs', '联系客服'],
     ['about', '关于我们'],
   ];
@@ -877,7 +960,7 @@ function renderMe() {
       </div>
       <div class="menu-list">
         ${menu.map(([ic, label]) => `
-          <div class="menu-item" ${menuNav[label] ? `data-nav="${menuNav[label]}"` : ''}>
+          <div class="menu-item" id="${label === '安装 App 到主屏幕' ? 'install-menu-item' : ''}" ${menuNav[label] ? `data-nav="${menuNav[label]}"` : ''}>
             ${icon(ic)}<span>${label}</span><span class="mi-arrow">›</span>
           </div>
         `).join('')}
@@ -897,6 +980,17 @@ function renderMe() {
     toast('已退出登录');
     nav('#/home');
   });
+
+  document.getElementById('install-menu-item')?.addEventListener('click', async () => {
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+      renderMe();
+    } else if (isIOSDevice()) {
+      toast('点击底部分享按钮，选择"添加到主屏幕"');
+    }
+  });
 }
 
 /* ================= PROFILE ================= */
@@ -904,6 +998,16 @@ function renderMe() {
 function renderProfile() {
   if (!requireAuth('#/profile')) return;
   const user = STATE.auth.user;
+
+  const dobState = {
+    dobType: user.dobType || 'solar',
+    dobSolar: user.dobType === 'lunar' ? '' : (user.dob || ''),
+    dobYear: user.dobYear || (new Date().getFullYear() - 30),
+    dobMonth: user.dobMonth || 1,
+    dobDay: user.dobDay || 1,
+    dobLeap: user.dobLeap || false,
+  };
+
   app.innerHTML = `
     ${header('我的资料', { back: '#/me' })}
     <div class="page-body">
@@ -912,6 +1016,7 @@ function renderProfile() {
         <div class="field"><label>姓名</label><input id="p-name" value="${user.name || ''}" /></div>
         <div class="field"><label>邮箱</label><input value="${user.email || ''}" disabled /></div>
         <div class="field"><label>联系电话</label><input id="p-phone" value="${user.phone || ''}" placeholder="请输入联系电话" /></div>
+        ${dobFieldHtml(dobState)}
         <div class="detail-list-row"><span>注册时间</span><b>${user.createdAt || '-'}</b></div>
       </div>
       <button class="btn gold block" id="save-profile-btn" style="margin-bottom:14px">保存</button>
@@ -925,12 +1030,26 @@ function renderProfile() {
     </div>
   `;
 
+  bindDobField(dobState);
+
   document.getElementById('save-profile-btn').addEventListener('click', async () => {
     const name = document.getElementById('p-name').value.trim();
     const phone = document.getElementById('p-phone').value.trim();
     if (!name) { toast('请输入姓名'); return; }
+    syncDobStateFromDom(dobState);
     try {
-      const { user: updated } = await api('/auth/me', { method: 'PUT', body: { name, phone } });
+      const { user: updated } = await api('/auth/me', {
+        method: 'PUT',
+        body: {
+          name, phone,
+          dobType: dobState.dobType,
+          dob: dobFinalValue(dobState),
+          dobYear: dobState.dobYear,
+          dobMonth: dobState.dobMonth,
+          dobDay: dobState.dobDay,
+          dobLeap: dobState.dobLeap,
+        },
+      });
       setAuth(STATE.auth.token, updated);
       toast('资料已保存');
       renderProfile();

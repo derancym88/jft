@@ -130,6 +130,12 @@ function ensureColumn(table, column, ddl) {
   }
 }
 ensureColumn('users', 'role', "role TEXT NOT NULL DEFAULT 'member'");
+ensureColumn('users', 'dob_type', 'dob_type TEXT');
+ensureColumn('users', 'dob', 'dob TEXT');
+ensureColumn('users', 'dob_year', 'dob_year INTEGER');
+ensureColumn('users', 'dob_month', 'dob_month INTEGER');
+ensureColumn('users', 'dob_day', 'dob_day INTEGER');
+ensureColumn('users', 'dob_leap', 'dob_leap INTEGER NOT NULL DEFAULT 0');
 
 require('./seed')(db);
 

@@ -9,7 +9,11 @@ const router = express.Router();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function publicUser(row) {
-  return { id: row.id, name: row.name, email: row.email, phone: row.phone, role: row.role, createdAt: row.created_at };
+  return {
+    id: row.id, name: row.name, email: row.email, phone: row.phone, role: row.role, createdAt: row.created_at,
+    dobType: row.dob_type, dob: row.dob, dobYear: row.dob_year, dobMonth: row.dob_month, dobDay: row.dob_day,
+    dobLeap: !!row.dob_leap,
+  };
 }
 
 router.post('/register', (req, res) => {
@@ -61,7 +65,7 @@ router.put('/me', authMiddleware, (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId);
   if (!user) return res.status(404).json({ error: '用户不存在' });
 
-  const { name, phone, currentPassword, newPassword } = req.body || {};
+  const { name, phone, currentPassword, newPassword, dobType, dob, dobYear, dobMonth, dobDay, dobLeap } = req.body || {};
   let passwordHash = user.password_hash;
   if (newPassword) {
     if (!currentPassword || !bcrypt.compareSync(String(currentPassword), user.password_hash)) {
@@ -71,10 +75,22 @@ router.put('/me', authMiddleware, (req, res) => {
     passwordHash = bcrypt.hashSync(String(newPassword), 10);
   }
 
-  db.prepare('UPDATE users SET name = ?, phone = ?, password_hash = ? WHERE id = ?').run(
+  const hasDobUpdate = dobType !== undefined;
+
+  db.prepare(`
+    UPDATE users SET name = ?, phone = ?, password_hash = ?,
+      dob_type = ?, dob = ?, dob_year = ?, dob_month = ?, dob_day = ?, dob_leap = ?
+    WHERE id = ?
+  `).run(
     name !== undefined && String(name).trim() ? String(name).trim() : user.name,
     phone !== undefined ? String(phone).trim() : user.phone,
     passwordHash,
+    hasDobUpdate ? dobType : user.dob_type,
+    hasDobUpdate ? dob : user.dob,
+    hasDobUpdate ? (dobYear ?? null) : user.dob_year,
+    hasDobUpdate ? (dobMonth ?? null) : user.dob_month,
+    hasDobUpdate ? (dobDay ?? null) : user.dob_day,
+    hasDobUpdate ? (dobLeap ? 1 : 0) : user.dob_leap,
     user.id
   );
 
