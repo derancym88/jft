@@ -156,6 +156,7 @@ button { font-family: inherit; }
   color: var(--gold-soft);
 }
 .quick-card .qc-icon svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+.quick-card .qc-icon img { width: 22px; height: 22px; object-fit: contain; }
 .quick-card .qc-title { font-size: 15px; font-weight: 700; }
 .quick-card .qc-sub { font-size: 11px; color: rgba(241,230,216,0.75); }
 
@@ -170,6 +171,7 @@ button { font-family: inherit; }
   font-size: 10.5px; color: var(--text-faint); flex: 1; text-align: center;
 }
 .feature-strip .fi svg { width: 18px; height: 18px; stroke: var(--gold-soft); fill: none; stroke-width: 1.6; }
+.feature-strip .fi img { width: 24px; height: 24px; object-fit: contain; }
 
 .section-title {
   display: flex; align-items: baseline; justify-content: space-between;
@@ -305,14 +307,7 @@ button { font-family: inherit; }
   padding: 13px 4px; border-bottom: 1px solid var(--border);
 }
 .item-row:last-child { border-bottom: none; }
-.checkbox {
-  width: 20px; height: 20px; border-radius: 5px;
-  border: 1.5px solid var(--gold-soft); flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-}
-.checkbox.checked { background: var(--gold); border-color: var(--gold); }
-.checkbox svg { width: 13px; height: 13px; stroke: #241304; stroke-width: 3; fill: none; opacity: 0; }
-.checkbox.checked svg { opacity: 1; }
+.checkbox-img { width: 24px; height: 24px; object-fit: contain; flex-shrink: 0; }
 .item-row .it-name { flex: 1; font-size: 14px; }
 .item-row .it-price { font-size: 13px; color: var(--gold-soft); font-weight: 600; }
 
@@ -355,6 +350,7 @@ button { font-family: inherit; }
   color: var(--gold-soft);
 }
 .cat-card .cat-icon svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+.cat-card .cat-icon img { width: 28px; height: 28px; object-fit: contain; }
 .cat-card .cat-name { font-size: 13.5px; font-weight: 600; }
 .cat-card .cat-desc { font-size: 10.5px; color: var(--text-faint); line-height: 1.4; }
 
@@ -370,6 +366,7 @@ button { font-family: inherit; }
   display: flex; align-items: center; justify-content: center; color: var(--gold-soft);
 }
 .type-card .ty-icon svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+.type-card .ty-icon img { width: 28px; height: 28px; object-fit: contain; }
 .type-card .ty-main { flex: 1; }
 .type-card .ty-name { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
 .type-card .ty-desc { font-size: 11px; color: var(--text-faint); line-height: 1.4; }
@@ -530,9 +527,14 @@ button { font-family: inherit; }
   flex: 1; background: none; border: none; display: flex; flex-direction: column;
   align-items: center; gap: 3px; padding: 6px 0; color: var(--text-faint); cursor: pointer;
 }
-.tab-btn svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.7; }
+.tab-btn img {
+  width: 22px; height: 22px; object-fit: contain;
+  filter: grayscale(85%) brightness(0.75) opacity(0.65);
+  transition: filter 0.15s;
+}
 .tab-btn span { font-size: 10px; }
 .tab-btn.active { color: var(--gold-soft); }
+.tab-btn.active img { filter: none; }
 
 .toast {
   position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);

@@ -326,14 +326,14 @@ async function renderHome() {
 
       <div class="quick-actions">
         <div class="quick-card primary" data-nav="#/events">
-          <div class="qc-icon">${icon('reg')}</div>
+          <div class="qc-icon"><img src="icons/pack/quick/register.png" alt="" /></div>
           <div>
             <div class="qc-title">法会报名</div>
             <div class="qc-sub">参与法会，积福纳祥</div>
           </div>
         </div>
         <div class="quick-card secondary" data-nav="#/prayers">
-          <div class="qc-icon">${icon('doc')}</div>
+          <div class="qc-icon"><img src="icons/pack/quick/prayer.png" alt="" /></div>
           <div>
             <div class="qc-title">疏文办理</div>
             <div class="qc-sub">线上办理，方便快捷</div>
@@ -342,11 +342,11 @@ async function renderHome() {
       </div>
 
       <div class="feature-strip">
-        <div class="fi">${icon('online')}<span>在线支付</span></div>
-        <div class="fi">${icon('save')}<span>资料保存</span></div>
-        <div class="fi">${icon('gen')}<span>自动生成疏文</span></div>
-        <div class="fi">${icon('orders')}<span>订单管理</span></div>
-        <div class="fi">${icon('remind')}<span>法会提醒</span></div>
+        <div class="fi"><img src="icons/pack/feature/online_payment.png" alt="" /><span>在线支付</span></div>
+        <div class="fi"><img src="icons/pack/feature/profile_data.png" alt="" /><span>资料保存</span></div>
+        <div class="fi"><img src="icons/pack/feature/auto_scripture.png" alt="" /><span>自动生成疏文</span></div>
+        <div class="fi"><img src="icons/pack/feature/orders.png" alt="" /><span>订单管理</span></div>
+        <div class="fi"><img src="icons/pack/feature/event_reminder.png" alt="" /><span>法会提醒</span></div>
       </div>
 
       <div class="section-title"><h2>近期法会</h2><span class="link" data-nav="#/events">查看更多 ›</span></div>
@@ -354,6 +354,12 @@ async function renderHome() {
     </div>
   `;
   bindInstallBanners();
+}
+
+const PACK_CATEGORY_IDS = new Set(['c1', 'c2', 'c3', 'c4', 'c5', 'c6']);
+function categoryIconHtml(c) {
+  if (PACK_CATEGORY_IDS.has(c.id)) return `<img src="icons/pack/category/${c.id}.png" alt="" />`;
+  return icon(c.icon);
 }
 
 function linkTarget(kind, id) {
@@ -457,7 +463,7 @@ async function renderEventDetail(id) {
       <div class="item-list">
         ${e.items.map((it) => `
           <div class="item-row" data-toggle="${it.id}">
-            <div class="checkbox ${sel.has(it.id) ? 'checked' : ''}">${icon('check')}</div>
+            <img class="checkbox-img" src="icons/pack/ui/${sel.has(it.id) ? 'checked' : 'unchecked'}.png" alt="" />
             <div class="it-name">${it.name}</div>
             <div class="it-price">${fmt(it.price)}</div>
           </div>
@@ -502,7 +508,7 @@ async function renderPrayerCategories() {
       <div class="cat-grid">
         ${categories.map((c) => `
           <div class="cat-card" data-nav="#/prayers/${c.id}">
-            <div class="cat-icon">${icon(c.icon)}</div>
+            <div class="cat-icon">${categoryIconHtml(c)}</div>
             <div class="cat-name">${c.name}</div>
             <div class="cat-desc">${c.desc}</div>
           </div>
@@ -527,7 +533,7 @@ async function renderPrayerTypes(catId) {
       <div class="section-title"><h2>选择疏文</h2></div>
       ${c.types.map((t) => `
         <div class="type-card">
-          <div class="ty-icon">${icon(c.icon)}</div>
+          <div class="ty-icon">${categoryIconHtml(c)}</div>
           <div class="ty-main">
             <div class="ty-name">${t.name}</div>
             <div class="ty-desc">${t.desc}</div>
