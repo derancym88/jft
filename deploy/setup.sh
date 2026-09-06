@@ -102,8 +102,11 @@ pm2 start ecosystem.config.js
 pm2 save
 pm2 startup systemd -u root --hp /root | tail -1 | bash || true
 
+SERVER_IP=$(curl -4 -fsS ifconfig.me 2>/dev/null || echo "<this-server-ip>")
 echo ""
 echo "== done =="
-echo "App running at http://103.253.24.144/"
+echo "App running at http://$SERVER_IP/"
+echo "(If this IP isn't in deploy/nginx-jft.conf's server_name yet, add it and re-run this script,"
+echo " or just visit by IP anyway -- nginx serves it as the default site.)"
 echo "pm2 status: pm2 status"
 echo "pm2 logs:   pm2 logs jft"
