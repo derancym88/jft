@@ -526,7 +526,7 @@ button { font-family: inherit; }
   z-index: 30;
 }
 .tab-btn {
-  flex: 1; background: none; border: none; display: flex; flex-direction: column;
+  flex: 1; position: relative; background: none; border: none; display: flex; flex-direction: column;
   align-items: center; gap: 3px; padding: 6px 0; color: var(--text-faint); cursor: pointer;
 }
 .tab-btn img {
@@ -537,6 +537,40 @@ button { font-family: inherit; }
 .tab-btn span { font-size: 10px; }
 .tab-btn.active { color: var(--gold-soft); }
 .tab-btn.active img { filter: none; }
+.tab-btn.active::after {
+  content: ""; position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%);
+  width: 14px; height: 3px; border-radius: 2px; background: var(--gold-soft);
+}
+
+/* curved-wave style with a raised center action (疏文) */
+.tabbar-wave {
+  background-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 44' preserveAspectRatio='none'%3E%3Cpath d='M0,0 L36,0 C40,0 42,2 44,6 C46,10 48,18 50,18 C52,18 54,10 56,6 C58,2 60,0 64,0 L100,0 L100,44 L0,44 Z' fill='%23ffffff'/%3E%3C/svg%3E");
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  backdrop-filter: none;
+  border-top: none;
+  box-shadow: 0 -4px 16px rgba(120,90,40,0.12);
+}
+.tab-btn-center { overflow: visible; }
+.tab-btn-center.active::after { display: none; }
+.tab-center-circle {
+  position: absolute; top: -26px; left: 50%; transform: translateX(-50%);
+  width: 52px; height: 52px; border-radius: 50%;
+  background: linear-gradient(135deg, #e0b656, #b6842a);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 6px 14px rgba(120,90,20,0.35);
+  border: 3px solid var(--bg);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.tab-btn-center.active .tab-center-circle {
+  transform: translateX(-50%) scale(1.06);
+  box-shadow: 0 8px 18px rgba(120,90,20,0.5);
+}
+#tabbar .tab-center-circle img {
+  width: 24px; height: 24px; filter: brightness(0) invert(1);
+}
+.tab-btn-center span:last-child { margin-top: 32px; }
 
 .toast {
   position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
