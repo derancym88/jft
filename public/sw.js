@@ -1,4 +1,4 @@
-const CACHE = 'lyszt-v7';
+const CACHE = 'lyszt-v8';
 const ASSETS = [
   './',
   './index.html',

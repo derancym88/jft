@@ -302,4 +302,64 @@ router.put('/members/:id', (req, res) => {
   res.json({ member });
 });
 
+/* ================= STAFF (ADMIN ACCOUNTS) ================= */
+
+router.get('/staff', (req, res) => {
+  const staff = db.prepare("SELECT id, name, email, phone, created_at FROM users WHERE role = 'admin' ORDER BY id ASC").all();
+  res.json({ staff });
+});
+
+router.post('/staff', (req, res) => {
+  const { name, email, phone, password } = req.body || {};
+  if (!name || !String(name).trim()) return res.status(400).json({ error: '请输入姓名' });
+  if (!email || !EMAIL_RE.test(String(email).trim())) return res.status(400).json({ error: '请输入有效的邮箱' });
+  if (!password || String(password).length < 6) return res.status(400).json({ error: '密码至少需要 6 位' });
+
+  const emailNorm = String(email).trim().toLowerCase();
+  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(emailNorm);
+  if (existing) return res.status(409).json({ error: '该邮箱已被注册' });
+
+  const passwordHash = bcrypt.hashSync(String(password), 10);
+  const info = db
+    .prepare("INSERT INTO users (name, email, phone, password_hash, role) VALUES (?, ?, ?, ?, 'admin')")
+    .run(String(name).trim(), emailNorm, phone ? String(phone).trim() : null, passwordHash);
+
+  const staff = db.prepare('SELECT id, name, email, phone, created_at FROM users WHERE id = ?').get(info.lastInsertRowid);
+  res.status(201).json({ staff });
+});
+
+router.put('/staff/:id', (req, res) => {
+  const user = db.prepare("SELECT * FROM users WHERE id = ? AND role = 'admin'").get(req.params.id);
+  if (!user) return res.status(404).json({ error: '管理员不存在' });
+
+  const { name, email, phone, password } = req.body || {};
+  let emailNorm = user.email;
+  if (email !== undefined) {
+    if (!EMAIL_RE.test(String(email).trim())) return res.status(400).json({ error: '请输入有效的邮箱' });
+    emailNorm = String(email).trim().toLowerCase();
+    const conflict = db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(emailNorm, user.id);
+    if (conflict) return res.status(409).json({ error: '该邮箱已被其他账号使用' });
+  }
+  if (password !== undefined && password !== '' && String(password).length < 6) {
+    return res.status(400).json({ error: '密码至少需要 6 位' });
+  }
+
+  const passwordHash = password ? bcrypt.hashSync(String(password), 10) : user.password_hash;
+  db.prepare('UPDATE users SET name = ?, email = ?, phone = ?, password_hash = ? WHERE id = ?')
+    .run(name !== undefined ? String(name).trim() : user.name, emailNorm, phone !== undefined ? String(phone).trim() : user.phone, passwordHash, user.id);
+
+  const staff = db.prepare('SELECT id, name, email, phone, created_at FROM users WHERE id = ?').get(user.id);
+  res.json({ staff });
+});
+
+router.delete('/staff/:id', (req, res) => {
+  const user = db.prepare("SELECT * FROM users WHERE id = ? AND role = 'admin'").get(req.params.id);
+  if (!user) return res.status(404).json({ error: '管理员不存在' });
+  if (Number(req.params.id) === req.userId) return res.status(400).json({ error: '不能删除自己当前登录的账号' });
+  const { c: adminCount } = db.prepare("SELECT COUNT(*) AS c FROM users WHERE role = 'admin'").get();
+  if (adminCount <= 1) return res.status(400).json({ error: '至少需保留一位管理员账号' });
+  db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
 module.exports = router;

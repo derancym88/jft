@@ -98,6 +98,7 @@ const TABS = [
   ['announcements', '公告'],
   ['orders', '订单'],
   ['members', '会员'],
+  ['settings', '设置'],
 ];
 
 function renderShell() {
@@ -126,6 +127,7 @@ function renderShell() {
     announcements: renderAnnouncements,
     orders: renderOrders,
     members: renderMembers,
+    settings: renderSettings,
   };
   main.innerHTML = `<div class="empty-note">加载中…</div>`;
   loaders[STATE.tab](main).catch((e) => {
@@ -626,6 +628,97 @@ async function renderMembers(main) {
       if (show && !box.innerHTML) {
         box.innerHTML = memberFormHtml(m.id, m);
         bindMemberForm(m.id, m.id);
+      }
+    });
+  });
+}
+
+/* ================= SETTINGS (ADMIN ACCOUNTS) ================= */
+
+function staffFormHtml(id, s) {
+  return `
+    <div class="form-grid">
+      <div class="field"><label>姓名</label><input id="sf-name-${id}" value="${esc(s.name || '')}" /></div>
+      <div class="field"><label>邮箱</label><input id="sf-email-${id}" type="email" value="${esc(s.email || '')}" /></div>
+      <div class="field"><label>电话</label><input id="sf-phone-${id}" value="${esc(s.phone || '')}" /></div>
+      <div class="field"><label>${id === 'new' ? '密码' : '重设密码 (留空则不变)'}</label><input id="sf-password-${id}" type="password" placeholder="${id === 'new' ? '至少 6 位' : '留空则不变'}" /></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn gold sm" id="sf-save-${id}">${id === 'new' ? '创建管理员' : '保存'}</button>
+      ${id !== 'new' ? `<button class="btn ghost sm" id="sf-delete-${id}">删除</button>` : ''}
+    </div>
+  `;
+}
+
+function bindStaffForm(id, existingId) {
+  document.getElementById(`sf-save-${id}`).addEventListener('click', async () => {
+    const name = document.getElementById(`sf-name-${id}`).value.trim();
+    const email = document.getElementById(`sf-email-${id}`).value.trim();
+    const phone = document.getElementById(`sf-phone-${id}`).value.trim();
+    const password = document.getElementById(`sf-password-${id}`).value;
+    if (!name || !email) { toast('请填写姓名与邮箱', true); return; }
+    if (id === 'new' && !password) { toast('请设置密码', true); return; }
+    try {
+      if (existingId) {
+        const body = { name, email, phone };
+        if (password) body.password = password;
+        await api(`/admin/staff/${existingId}`, { method: 'PUT', body });
+        toast('已保存');
+      } else {
+        await api('/admin/staff', { method: 'POST', body: { name, email, phone, password } });
+        toast('已创建管理员');
+      }
+      renderShell();
+    } catch (e) { toast(e.message, true); }
+  });
+  const deleteBtn = document.getElementById(`sf-delete-${id}`);
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', async () => {
+      if (!confirm('确定要删除此管理员账号吗？')) return;
+      try {
+        await api(`/admin/staff/${existingId}`, { method: 'DELETE' });
+        toast('已删除');
+        renderShell();
+      } catch (e) { toast(e.message, true); }
+    });
+  }
+}
+
+async function renderSettings(main) {
+  const { staff } = await api('/admin/staff');
+  main.innerHTML = `
+    ${mainHeader('设置', '管理员账号管理')}
+    <div class="panel">
+      <div class="panel-title">新增管理员</div>
+      ${staffFormHtml('new', {})}
+    </div>
+    <div class="panel">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>姓名</th><th>邮箱</th><th>电话</th><th>创建时间</th><th></th></tr></thead>
+          <tbody>
+            ${staff.length ? staff.map((s) => `
+              <tr>
+                <td>${esc(s.name)}</td><td>${esc(s.email)}</td><td>${esc(s.phone || '-')}</td><td>${esc(s.created_at)}</td>
+                <td><span class="il-link" data-edit-staff="${s.id}">编辑</span></td>
+              </tr>
+              <tr id="staff-edit-row-${s.id}" style="display:none"><td colspan="5"><div id="staff-edit-${s.id}"></div></td></tr>
+            `).join('') : `<tr><td colspan="5" class="empty-note">暂无管理员</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  bindStaffForm('new', null);
+  staff.forEach((s) => {
+    document.querySelector(`[data-edit-staff="${s.id}"]`).addEventListener('click', () => {
+      const row = document.getElementById(`staff-edit-row-${s.id}`);
+      const box = document.getElementById(`staff-edit-${s.id}`);
+      const show = row.style.display === 'none';
+      row.style.display = show ? '' : 'none';
+      if (show && !box.innerHTML) {
+        box.innerHTML = staffFormHtml(s.id, s);
+        bindStaffForm(s.id, s.id);
       }
     });
   });

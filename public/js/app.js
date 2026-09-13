@@ -236,12 +236,19 @@ function dobEnrichedText(dob) {
 
 function bindDobInputChangeListeners(dobState) {
   const onChange = () => { syncDobStateFromDom(dobState); refreshDobHint(dobState); };
+  // Bind both 'input' and 'change' -- some mobile browsers' native date picker
+  // (type="date") don't reliably fire 'change' inside an installed PWA until
+  // the field loses focus, while 'input' fires as soon as a date is picked.
   if (dobState.dobType === 'lunar') {
     ['f-dob-year', 'f-dob-month', 'f-dob-day', 'f-dob-leap'].forEach((id) => {
-      document.getElementById(id)?.addEventListener('change', onChange);
+      const el = document.getElementById(id);
+      el?.addEventListener('input', onChange);
+      el?.addEventListener('change', onChange);
     });
   } else {
-    document.getElementById('f-dob-solar')?.addEventListener('change', onChange);
+    const el = document.getElementById('f-dob-solar');
+    el?.addEventListener('input', onChange);
+    el?.addEventListener('change', onChange);
   }
 }
 
