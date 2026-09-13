@@ -127,7 +127,7 @@ pm2 restart jft
 Useful commands on the server: `pm2 status`, `pm2 logs jft`, `pm2 restart jft`.
 
 `deploy/nginx-jft.conf` is written for IP-only access (`server_name
-103.253.24.144`). If you point a domain at the server later, update
+118.107.216.13`). If you point a domain at the server later, update
 `server_name` and add TLS with `certbot --nginx`.
 
 ### HTTPS (required for the PWA to install properly on a phone)
@@ -143,12 +143,12 @@ cd ~/jft && git pull
 sudo bash deploy/enable-ssl.sh
 ```
 
-By default it uses `103-253-24-144.sslip.io` — a free wildcard-DNS service
+By default it uses `118-107-216-13.sslip.io` — a free wildcard-DNS service
 where any subdomain encoding an IP resolves straight to that IP, no signup
-or DNS record needed. Then visit `https://103-253-24-144.sslip.io/` on the
+or DNS record needed. Then visit `https://118-107-216-13.sslip.io/` on the
 phone and "Add to Home Screen" should work normally.
 
-To use a real domain instead: point its `A` record at `103.253.24.144`
+To use a real domain instead: point its `A` record at `118.107.216.13`
 first, then run `sudo bash deploy/enable-ssl.sh yourdomain.com`.
 
 Note: this only fixes the *HTTPS-for-installability* requirement. If the
@@ -183,7 +183,7 @@ on infrastructure that *can* reach Google's servers, entirely through a web
 UI, no local Android tooling needed:
 
 1. Go to pwabuilder.com and enter the site's HTTPS URL (e.g.
-   `https://103-253-24-144.sslip.io/`). It scores the manifest, service
+   `https://118-107-216-13.sslip.io/`). It scores the manifest, service
    worker, and icons — fix anything it flags red first (usually a missing
    asset or a manifest field) since that's also what makes Chrome offer a
    real "Install app" instead of a plain shortcut.

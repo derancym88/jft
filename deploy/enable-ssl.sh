@@ -12,9 +12,9 @@
 #   sudo bash deploy/enable-ssl.sh mydomain.example.com  # or your own domain
 #
 # sslip.io is a free wildcard-DNS service: any subdomain that encodes an IP
-# (e.g. 103-253-24-144.sslip.io) resolves straight to that IP, no signup or
+# (e.g. 118-107-216-13.sslip.io) resolves straight to that IP, no signup or
 # DNS setup needed. If you'd rather use a real domain, point its A record at
-# 103.253.24.144 first, then pass it as the argument.
+# 118.107.216.13 first, then pass it as the argument.
 #
 # Safe to re-run (e.g. to switch domains or renew manually).
 
@@ -28,7 +28,7 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
-DOMAIN="${1:-103-253-24-144.sslip.io}"
+DOMAIN="${1:-118-107-216-13.sslip.io}"
 echo "== Enabling HTTPS for $DOMAIN =="
 
 # ---- sanity check: domain must actually resolve to this server ----
@@ -50,7 +50,7 @@ fi
 # ---- make sure nginx knows this server_name before certbot looks for it ----
 if ! grep -q "$DOMAIN" /etc/nginx/sites-available/jft 2>/dev/null; then
   echo "-- adding $DOMAIN to the nginx server_name --"
-  sed -i "s/server_name .*/server_name 103.253.24.144 $DOMAIN;/" /etc/nginx/sites-available/jft
+  sed -i "s/server_name .*/server_name 118.107.216.13 $DOMAIN;/" /etc/nginx/sites-available/jft
   nginx -t
   systemctl reload nginx
 fi
