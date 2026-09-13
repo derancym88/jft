@@ -1,9 +1,10 @@
-const CACHE = 'lyszt-v6';
+const CACHE = 'lyszt-v7';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './css/style.css',
+  './js/vendor/solarlunar.min.js',
   './js/data.js',
   './js/app.js',
   './icons/icon-192.png',

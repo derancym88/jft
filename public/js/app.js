@@ -119,8 +119,36 @@ function dobFieldHtml(dobState) {
         <div class="tab-chip ${dobState.dobType === 'lunar' ? 'active' : ''}" data-dob-type="lunar">农历</div>
       </div>
       <div id="dob-input-area">${dobInputAreaHtml(dobState)}</div>
+      <div id="dob-hint" style="font-size:12px;color:var(--gold-soft);margin-top:6px;min-height:15px">${dobHintText(dobState)}</div>
     </div>
   `;
+}
+
+// Live "the other calendar shows..." hint computed straight from dobState
+// (no string parsing needed here, unlike dobEnrichedText) -- refreshed on
+// every edit so the auto-conversion is visible before the user even saves.
+function dobHintText(dobState) {
+  if (!window.solarLunar) return '';
+  try {
+    if (dobState.dobType === 'lunar') {
+      const y = Number(dobState.dobYear), m = Number(dobState.dobMonth), d = Number(dobState.dobDay);
+      if (!y || !m || !d) return '';
+      const r = solarLunar.lunar2solar(y, m, d, !!dobState.dobLeap);
+      if (r && r !== -1) return `公历：${r.cYear}-${String(r.cMonth).padStart(2, '0')}-${String(r.cDay).padStart(2, '0')}`;
+    } else {
+      const solar = dobState.dobSolar;
+      if (!solar) return '';
+      const [y, m, d] = solar.split('-').map(Number);
+      const r = solarLunar.solar2lunar(y, m, d);
+      if (r && r !== -1) return `农历：${r.lYear}年${r.monthCn}${r.dayCn}`;
+    }
+  } catch (e) { /* ignore, leave hint blank */ }
+  return '';
+}
+
+function refreshDobHint(dobState) {
+  const el = document.getElementById('dob-hint');
+  if (el) el.textContent = dobHintText(dobState);
 }
 
 function dobInputAreaHtml(dobState) {
@@ -155,11 +183,66 @@ function syncDobStateFromDom(dobState) {
   }
 }
 
+// The raw, round-trip-safe value to store (and to re-populate the picker
+// with later) -- never enrich this one, or a saved "date (农历...)" string
+// would break the <input type="date"> the next time the picker loads it.
 function dobFinalValue(dobState) {
   if (dobState.dobType === 'lunar') {
     return `农历${dobState.dobYear}年${dobState.dobLeap ? '闰' : ''}${LUNAR_MONTHS[dobState.dobMonth - 1]}${LUNAR_DAYS[dobState.dobDay - 1]}`;
   }
   return dobState.dobSolar || '';
+}
+
+function parseDobString(dob) {
+  if (!dob) return null;
+  const solarMatch = dob.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (solarMatch) {
+    return { type: 'solar', y: Number(solarMatch[1]), m: Number(solarMatch[2]), d: Number(solarMatch[3]) };
+  }
+  const dayNames = LUNAR_DAYS.slice().sort((a, b) => b.length - a.length).join('|');
+  const monthNames = LUNAR_MONTHS.slice().sort((a, b) => b.length - a.length).join('|');
+  const lunarMatch = dob.match(new RegExp(`^农历(\\d{4})年(闰)?(${monthNames})(${dayNames})$`));
+  if (lunarMatch) {
+    const [, yStr, leapStr, monthName, dayName] = lunarMatch;
+    const mIdx = LUNAR_MONTHS.indexOf(monthName);
+    const dIdx = LUNAR_DAYS.indexOf(dayName);
+    if (mIdx >= 0 && dIdx >= 0) {
+      return { type: 'lunar', y: Number(yStr), m: mIdx + 1, d: dIdx + 1, leap: !!leapStr };
+    }
+  }
+  return null;
+}
+
+// Computes the read-only "both calendars" display text for an already-saved
+// dob string (auto-converts via the vendored solarlunar library). Used only
+// at display sites (order confirm/detail) -- never fed back into a picker.
+function dobEnrichedText(dob) {
+  const parsed = parseDobString(dob);
+  if (!parsed || !window.solarLunar) return dob || '';
+  try {
+    if (parsed.type === 'solar') {
+      const r = solarLunar.solar2lunar(parsed.y, parsed.m, parsed.d);
+      if (r && r !== -1) return `${dob} (农历${r.lYear}年${r.monthCn}${r.dayCn})`;
+    } else {
+      const r = solarLunar.lunar2solar(parsed.y, parsed.m, parsed.d, parsed.leap);
+      if (r && r !== -1) {
+        const solarStr = `${r.cYear}-${String(r.cMonth).padStart(2, '0')}-${String(r.cDay).padStart(2, '0')}`;
+        return `${dob} (公历${solarStr})`;
+      }
+    }
+  } catch (e) { /* fall through */ }
+  return dob || '';
+}
+
+function bindDobInputChangeListeners(dobState) {
+  const onChange = () => { syncDobStateFromDom(dobState); refreshDobHint(dobState); };
+  if (dobState.dobType === 'lunar') {
+    ['f-dob-year', 'f-dob-month', 'f-dob-day', 'f-dob-leap'].forEach((id) => {
+      document.getElementById(id)?.addEventListener('change', onChange);
+    });
+  } else {
+    document.getElementById('f-dob-solar')?.addEventListener('change', onChange);
+  }
 }
 
 function bindDobField(dobState) {
@@ -169,8 +252,11 @@ function bindDobField(dobState) {
       dobState.dobType = chip.dataset.dobType;
       document.querySelectorAll('[data-dob-type]').forEach((c) => c.classList.toggle('active', c.dataset.dobType === dobState.dobType));
       document.getElementById('dob-input-area').innerHTML = dobInputAreaHtml(dobState);
+      bindDobInputChangeListeners(dobState);
+      refreshDobHint(dobState);
     });
   });
+  bindDobInputChangeListeners(dobState);
 }
 
 async function ensureEvents() {
@@ -706,7 +792,7 @@ function renderConfirm() {
         <div class="fc-title">主事人资料</div>
         <div class="detail-list-row"><span>姓名</span><b>${cart.main.name}</b></div>
         <div class="detail-list-row"><span>身份证号</span><b>${cart.main.idnum || '-'}</b></div>
-        <div class="detail-list-row"><span>出生日期</span><b>${cart.main.dob || '-'}</b></div>
+        <div class="detail-list-row"><span>出生日期</span><b>${cart.main.dob ? dobEnrichedText(cart.main.dob) : '-'}</b></div>
         <div class="detail-list-row"><span>联系地址</span><b>${cart.main.addr || '-'}</b></div>
         <div class="detail-list-row"><span>联系电话</span><b>${cart.main.phone}</b></div>
         ${cart.members.length ? `<div class="detail-list-row"><span>添加家人</span><b>${cart.members.map((m) => m.name).join('、')}</b></div>` : ''}
@@ -860,7 +946,7 @@ async function renderOrderDetail(orderNo) {
         <div class="fc-title">主事人资料</div>
         <div class="detail-list-row"><span>姓名</span><b>${order.main.name}</b></div>
         <div class="detail-list-row"><span>身份证号</span><b>${order.main.idnum || '-'}</b></div>
-        <div class="detail-list-row"><span>出生日期</span><b>${order.main.dob || '-'}</b></div>
+        <div class="detail-list-row"><span>出生日期</span><b>${order.main.dob ? dobEnrichedText(order.main.dob) : '-'}</b></div>
         <div class="detail-list-row"><span>联系地址</span><b>${order.main.addr || '-'}</b></div>
         <div class="detail-list-row"><span>联系电话</span><b>${order.main.phone}</b></div>
         ${order.members.length ? `<div class="detail-list-row"><span>家人</span><b>${order.members.map((m) => m.name).join('、')}</b></div>` : ''}
